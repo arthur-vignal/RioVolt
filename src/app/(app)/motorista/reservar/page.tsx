@@ -57,37 +57,37 @@ function ReservarContent() {
   if (step === "feito") {
     return (
       <div className="mx-auto flex max-w-[620px] flex-col items-center py-10 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-free/15 ring-1 ring-free/30">
-          <Check className="h-8 w-8 text-free" strokeWidth={2.5} />
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl #16a34a/15 ring-1 #16a34a/30">
+          <Check className="h-8 w-8 #16a34a" strokeWidth={2.5} />
         </div>
         <h1 className="mt-5 text-2xl font-semibold tracking-tight">Vaga reservada</h1>
-        <p className="mt-2 text-[13px] text-muted-foreground/80">
+        <p className="mt-2 text-[13px] #000000/80">
           {point.name} · {fmt(hour)} · connector liberado no seu nome
         </p>
 
-        <div className="ev-card mt-6 w-full rounded-xl border border-border p-5 text-left">
-          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground/70">
+        <div className="ev-card mt-6 w-full rounded-[6px] border border-black/10 p-5 text-left">
+          <p className="text-[11px] font-medium uppercase tracking-[0.18em] #000000/70">
             Como ativar
           </p>
           <ol className="mt-3 space-y-3">
             <li className="flex gap-3">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted text-[11px] font-semibold">1</span>
-              <p className="text-[13px] text-foreground/90">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] #f2f3f2 text-[11px] font-semibold">1</span>
+              <p className="text-[13px] #000000/90">
                 Chegue no local dentro da janela. A trava só libera com você a menos de{" "}
-                <span className="text-foreground">{TOLERANCE_MIN} m</span> do ponto.
+                <span className="#000000">{TOLERANCE_MIN} m</span> do ponto.
               </p>
             </li>
             <li className="flex gap-3">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted text-[11px] font-semibold">2</span>
-              <p className="text-[13px] text-foreground/90">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] #f2f3f2 text-[11px] font-semibold">2</span>
+              <p className="text-[13px] #000000/90">
                 Escaneie o QR Code do painel do carregador ou aproxime o celular.
               </p>
             </li>
             <li className="flex gap-3">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted text-[11px] font-semibold">3</span>
-              <p className="text-[13px] text-foreground/90">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] #f2f3f2 text-[11px] font-semibold">3</span>
+              <p className="text-[13px] #000000/90">
                 A carga começa e o kWh desconta da sua franquia. Excedente sai a{" "}
-                <span className="text-foreground">R$ {current.overageRate.toFixed(2).replace(".", ",")}/kWh</span>.
+                <span className="#000000">R$ {current.overageRate.toFixed(2).replace(".", ",")}/kWh</span>.
               </p>
             </li>
           </ol>
@@ -96,14 +96,14 @@ function ReservarContent() {
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <Link
             href="/motorista/pontos"
-            className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-foreground/[0.04] px-4 text-[13px] font-medium transition-colors hover:bg-foreground/[0.08]"
+            className="inline-flex h-9 items-center gap-2 rounded-[6px] border border-black/10 bg-foreground/[0.04] px-4 text-[13px] font-medium transition-colors hover:bg-foreground/[0.08]"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Ver pontos
           </Link>
           <Link
             href="/motorista/assinatura"
-            className="inline-flex h-9 items-center gap-2 rounded-md border border-free/30 bg-free/10 px-4 text-[13px] font-medium text-free transition-colors hover:bg-free/15"
+            className="inline-flex h-9 items-center gap-2 rounded-[6px] border #16a34a/30 #16a34a/10 px-4 text-[13px] font-medium #16a34a transition-colors hover:#16a34a/15"
           >
             Ver minha assinatura
           </Link>
@@ -115,7 +115,7 @@ function ReservarContent() {
   return (
     <div className="mx-auto max-w-[1100px]">
       <div className="mb-6">
-        <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground/70">
+        <p className="text-[11px] font-medium uppercase tracking-[0.18em] #000000/70">
           Agendamento
         </p>
         <h1 className="mt-1.5 text-2xl font-semibold tracking-tight">Reservar vaga</h1>
@@ -134,13 +134,13 @@ function ReservarContent() {
             <li key={s.k} className="flex items-center gap-2">
               <span
                 className={cn(
-                  "flex h-6 w-6 items-center justify-center rounded-md text-[11px] font-semibold",
-                  done ? "bg-free/15 text-free" : "bg-muted text-muted-foreground/60",
+                  "flex h-6 w-6 items-center justify-center rounded-[6px] text-[11px] font-semibold",
+                  done ? "#16a34a/15 #16a34a" : "#f2f3f2 #000000/60",
                 )}
               >
                 {i + 1}
               </span>
-              <span className={done ? "text-foreground" : "text-muted-foreground/60"}>{s.label}</span>
+              <span className={done ? "#000000" : "#000000/60"}>{s.label}</span>
               {i < 2 && <span className="mx-1 h-px w-8 bg-border" />}
             </li>
           );
@@ -149,7 +149,7 @@ function ReservarContent() {
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <div className="flex flex-col gap-4">
-          <section className="ev-card rounded-xl border border-border p-5">
+          <section className="ev-card rounded-[6px] border border-black/10 p-5">
             <h2 className="text-[13px] font-semibold">1. Ponto de recarga</h2>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {POINTS.map((p) => {
@@ -160,15 +160,15 @@ function ReservarContent() {
                     type="button"
                     onClick={() => setPointId(p.id)}
                     className={cn(
-                      "rounded-lg border p-3 text-left transition-colors",
-                      on ? "border-free/40 bg-free/[0.07]" : "border-border hover:border-foreground/20",
+                      "rounded-[6px] border p-3 text-left transition-colors",
+                      on ? "#16a34a/40 #16a34a/[0.07]" : "border-black/10 hover:border-foreground/20",
                     )}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <span className="text-[13px] font-medium">{p.name}</span>
-                      {on && <Check className="h-3.5 w-3.5 shrink-0 text-free" />}
+                      {on && <Check className="h-3.5 w-3.5 shrink-0 #16a34a" />}
                     </div>
-                    <p className="mt-1 text-[11px] text-muted-foreground/70">{p.neighborhood}</p>
+                    <p className="mt-1 text-[11px] #000000/70">{p.neighborhood}</p>
                     <div className="mt-2 flex flex-wrap gap-1">
                       {p.connectors.map((c) => (
                         <KindBadge key={c.id} kind={c.kind} powerKw={c.powerKw} />
@@ -180,10 +180,10 @@ function ReservarContent() {
             </div>
           </section>
 
-          <section className="ev-card rounded-xl border border-border p-5">
+          <section className="ev-card rounded-[6px] border border-black/10 p-5">
             <div className="flex items-center justify-between">
               <h2 className="text-[13px] font-semibold">2. Janela de horário</h2>
-              <div className="inline-flex rounded-md border border-border p-0.5">
+              <div className="inline-flex rounded-[6px] border border-black/10 p-0.5">
                 {(["noturno", "pro"] as PlanId[]).map((id) => (
                   <button
                     key={id}
@@ -195,7 +195,7 @@ function ReservarContent() {
                     }}
                     className={cn(
                       "rounded px-2.5 py-1 text-[11px] font-medium transition-colors",
-                      plan === id ? "bg-foreground text-background" : "text-muted-foreground",
+                      plan === id ? "bg-foreground text-background" : "#000000",
                     )}
                   >
                     {PLAN_BY_ID[id].name}
@@ -204,7 +204,7 @@ function ReservarContent() {
               </div>
             </div>
 
-            <p className="mt-1.5 text-[12px] text-muted-foreground/70">
+            <p className="mt-1.5 text-[12px] #000000/70">
               Janela permitida: {PLAN_WINDOW_LABEL[plan]} · duração {duration >= 60 ? `${duration / 60}h` : `${duration} min`}
             </p>
 
@@ -215,10 +215,10 @@ function ReservarContent() {
                   type="button"
                   onClick={() => setHour(h)}
                   className={cn(
-                    "rounded-md border py-2 font-mono text-[12px] transition-colors",
+                    "rounded-[6px] border py-2 font-mono text-[12px] transition-colors",
                     hour === h
-                      ? "border-free/50 bg-free/15 text-free"
-                      : "border-border text-muted-foreground hover:border-foreground/25 hover:text-foreground",
+                      ? "#16a34a/50 #16a34a/15 #16a34a"
+                      : "border-black/10 #000000 hover:border-foreground/25 hover:#000000",
                   )}
                 >
                   {fmt(h)}
@@ -226,11 +226,11 @@ function ReservarContent() {
               ))}
             </div>
 
-            <div className="mt-4 flex items-start gap-2 rounded-lg border border-border bg-background/40 p-3">
-              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-free" />
-              <p className="text-[12px] text-muted-foreground/80">
+            <div className="mt-4 flex items-start gap-2 rounded-[6px] border border-black/10 #f7f8f6/40 p-3">
+              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 #16a34a" />
+              <p className="text-[12px] #000000/80">
                 Reserva fixa semanal, no mesmo conector, com{" "}
-                <span className="text-foreground">{BUFFER_MIN} min</span> de folga entre
+                <span className="#000000">{BUFFER_MIN} min</span> de folga entre
                 agendamentos. Sem recorrência, a reserva vale só para a noite escolhida.
               </p>
             </div>
@@ -242,16 +242,16 @@ function ReservarContent() {
                   type="button"
                   onClick={() => setWeekday(i)}
                   className={cn(
-                    "h-8 w-10 rounded-md border text-[11px] font-medium transition-colors",
+                    "h-8 w-10 rounded-[6px] border text-[11px] font-medium transition-colors",
                     weekday === i
-                      ? "border-foreground/25 bg-foreground/[0.08] text-foreground"
-                      : "border-border text-muted-foreground hover:text-foreground",
+                      ? "border-foreground/25 bg-foreground/[0.08] #000000"
+                      : "border-black/10 #000000 hover:#000000",
                   )}
                 >
                   {d}
                 </button>
               ))}
-              <span className="ml-auto text-[11px] text-muted-foreground/60">
+              <span className="ml-auto text-[11px] #000000/60">
                 recorrência semanal
               </span>
             </div>
@@ -259,18 +259,18 @@ function ReservarContent() {
         </div>
 
         <aside className="lg:sticky lg:top-6 lg:self-start">
-          <div className="ev-card rounded-xl border border-border p-5">
+          <div className="ev-card rounded-[6px] border border-black/10 p-5">
             <h2 className="text-[13px] font-semibold">Resumo</h2>
 
             <dl className="mt-4 space-y-3 text-[12px]">
               <div className="flex justify-between gap-3">
-                <dt className="flex items-center gap-1.5 text-muted-foreground/70">
+                <dt className="flex items-center gap-1.5 #000000/70">
                   <MapPin className="h-3.5 w-3.5" /> Ponto
                 </dt>
                 <dd className="text-right font-medium">{point.name}</dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt className="flex items-center gap-1.5 text-muted-foreground/70">
+                <dt className="flex items-center gap-1.5 #000000/70">
                   <Clock className="h-3.5 w-3.5" /> Horário
                 </dt>
                 <dd className="text-right font-medium">
@@ -278,28 +278,28 @@ function ReservarContent() {
                 </dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt className="flex items-center gap-1.5 text-muted-foreground/70">
+                <dt className="flex items-center gap-1.5 #000000/70">
                   <Timer className="h-3.5 w-3.5" /> Tolerância
                 </dt>
                 <dd className="text-right font-medium">{TOLERANCE_MIN} min</dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt className="text-muted-foreground/70">Plano</dt>
+                <dt className="#000000/70">Plano</dt>
                 <dd className="text-right font-medium">{current.name}</dd>
               </div>
             </dl>
 
-            <div className="mt-4 space-y-2 border-t border-border pt-4 text-[12px]">
+            <div className="mt-4 space-y-2 border-t border-black/10 pt-4 text-[12px]">
               <div className="flex justify-between">
-                <span className="text-muted-foreground/70">Mensalidade</span>
+                <span className="#000000/70">Mensalidade</span>
                 <span className="tabular-nums">R$ {current.monthlyFee.toFixed(2).replace(".", ",")}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground/70">Franquia do plano</span>
+                <span className="#000000/70">Franquia do plano</span>
                 <span className="tabular-nums">{current.includedKwh} kWh</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground/70">Carga estimada</span>
+                <span className="#000000/70">Carga estimada</span>
                 <span className="tabular-nums">{estimateKwh} kWh</span>
               </div>
               {overEstimate > 0 && (
@@ -310,7 +310,7 @@ function ReservarContent() {
                   </span>
                 </div>
               )}
-              <div className="flex justify-between border-t border-border pt-2 text-[13px] font-semibold">
+              <div className="flex justify-between border-t border-black/10 pt-2 text-[13px] font-semibold">
                 <span>Total do ciclo</span>
                 <span className="tabular-nums">
                   R$ {totalToday.toFixed(2).replace(".", ",")}
@@ -321,19 +321,19 @@ function ReservarContent() {
             <button
               type="button"
               onClick={() => setStep(step === "escolher" ? "confirmar" : "feito")}
-              className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-free/15 text-[13px] font-semibold text-free ring-1 ring-free/30 transition-colors hover:bg-free/20"
+              className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-[6px] #16a34a/15 text-[13px] font-semibold #16a34a ring-1 #16a34a/30 transition-colors hover:#16a34a/20"
             >
               {step === "escolher" ? "Revisar reserva" : "Confirmar reserva"}
               <Check className="h-4 w-4" />
             </button>
 
             <div className="mt-3 space-y-2">
-              <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground/70">
+              <p className="flex items-start gap-1.5 text-[11px] #000000/70">
                 <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-busy" />
                 Não iniciar a carga gera taxa de no-show. Passar do tempo gera multa de{" "}
                 {IDLE_FEE_PER_MIN.toFixed(2).replace(".", ",")} R$/min.
               </p>
-              <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground/70">
+              <p className="flex items-start gap-1.5 text-[11px] #000000/70">
                 <QrCode className="h-3 w-3 shrink-0 text-taken" />
                 O conector só destrava com QR Code + GPS no local.
               </p>
@@ -348,7 +348,7 @@ function ReservarContent() {
 export default function ReservarPage() {
   return (
     <Shell scope="motorista">
-      <Suspense fallback={<div className="text-sm text-muted-foreground">Carregando…</div>}>
+      <Suspense fallback={<div className="text-sm #000000">Carregando…</div>}>
         <ReservarContent />
       </Suspense>
     </Shell>

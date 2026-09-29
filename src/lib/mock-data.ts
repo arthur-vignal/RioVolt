@@ -20,9 +20,8 @@ export type Point = {
   neighborhood: string;
   focus: "moradores" | "motoristas";
   address: string;
-  /** coords aproximadas no mapa estático (x/y em % do viewport do mapa) */
-  x: number;
-  y: number;
+  lat: number;
+  lon: number;
   openHours: string;
   partner: string;
   connectors: Connector[];
@@ -31,12 +30,12 @@ export type Point = {
 export const POINTS: Point[] = [
   {
     id: "hub-1",
-    name: "Estacionamento Botafogo",
+    name: "Rua São Clemente",
     neighborhood: "Botafogo",
     focus: "moradores",
     address: "Rua São Clemente, 210 — parking 24h",
-    x: 34,
-    y: 30,
+    lat: -22.9518278,
+    lon: -43.1953874,
     openHours: "24 horas",
     partner: "Estacionamento 24h",
     connectors: [
@@ -46,12 +45,12 @@ export const POINTS: Point[] = [
   },
   {
     id: "hub-2",
-    name: "Shopping Copacabana — subsolo",
-    neighborhood: "Copacabana",
+    name: "Shopping Leblon",
+    neighborhood: "Leblon",
     focus: "moradores",
-    address: "Av. Atlântica, parking coberto",
-    x: 30,
-    y: 46,
+    address: "Av. Ataulfo de Paiva, 1166 — shopping",
+    lat: -22.9823307,
+    lon: -43.2165803,
     openHours: "24 horas",
     partner: "Shopping",
     connectors: [
@@ -61,12 +60,12 @@ export const POINTS: Point[] = [
   },
   {
     id: "hub-3",
-    name: "Eixo das Américas — comercial",
+    name: "Eixo das Américas",
     neighborhood: "Barra da Tijuca",
     focus: "motoristas",
-    address: "Av. das Américas, 3.500 — subsolo",
-    x: 12,
-    y: 66,
+    address: "Av. das Américas, 3500 — subsolo",
+    lat: -22.9994438,
+    lon: -43.3491734,
     openHours: "06h às 23h",
     partner: "Edifício corporativo",
     connectors: [
@@ -76,12 +75,12 @@ export const POINTS: Point[] = [
   },
   {
     id: "hub-4",
-    name: "Shopping Recreio",
-    neighborhood: "Recreio",
+    name: "Recreio Shopping",
+    neighborhood: "Recreio dos Bandeirantes",
     focus: "motoristas",
-    address: "Av. das Américas, 3.400 — shopping",
-    x: 10,
-    y: 80,
+    address: "Av. das Américas, 3400 — shopping",
+    lat: -23.0146487,
+    lon: -43.4690733,
     openHours: "10h às 22h",
     partner: "Shopping",
     connectors: [
@@ -91,12 +90,12 @@ export const POINTS: Point[] = [
   },
   {
     id: "hub-5",
-    name: "Posto Centro — Av. Brasil",
-    neighborhood: "Centro / Zona Portuária",
+    name: "Posto Centro",
+    neighborhood: "Centro / Porto",
     focus: "motoristas",
     address: "Av. Brasil, posto de combustível",
-    x: 62,
-    y: 16,
+    lat: -22.9121619,
+    lon: -43.2311861,
     openHours: "24 horas",
     partner: "Posto de combustível",
     connectors: [
@@ -107,11 +106,11 @@ export const POINTS: Point[] = [
   {
     id: "hub-6",
     name: "Estacionamento Maracanã",
-    neighborhood: "Tijuca / Maracanã",
+    neighborhood: "Maracanã",
     focus: "moradores",
-    address: "Av. Pres. Castelo Branco, parking 24h",
-    x: 58,
-    y: 8,
+    address: "Av. Presidente Castelo Branco, parking 24h",
+    lat: -22.9106304,
+    lon: -43.2284103,
     openHours: "24 horas",
     partner: "Estacionamento 24h",
     connectors: [
@@ -120,6 +119,7 @@ export const POINTS: Point[] = [
     ],
   },
 ];
+
 
 // ---------------------------------------------------------------- planos
 

@@ -41,10 +41,10 @@ function slotState(point: Point, plan: PlanId, hour: number): SlotState {
 }
 
 const SLOT_STYLE: Record<SlotState, { cell: string; label: string }> = {
-  free: { cell: "border-free/30 bg-free/10 text-free", label: "Livre" },
+  free: { cell: "#16a34a/30 #16a34a/10 #16a34a", label: "Livre" },
   tight: { cell: "border-busy/30 bg-busy/10 text-busy", label: "Última vaga" },
-  full: { cell: "border-border bg-muted/40 text-muted-foreground/50", label: "Ocupado" },
-  offline: { cell: "border-dashed border-border bg-transparent text-muted-foreground/35", label: "Fora da janela" },
+  full: { cell: "border-black/10 #f2f3f2/40 #000000/50", label: "Ocupado" },
+  offline: { cell: "border-dashed border-black/10 bg-transparent #000000/35", label: "Fora da janela" },
 };
 
 function PointRow({
@@ -59,11 +59,11 @@ function PointRow({
   onPickHour: (h: number) => void;
 }) {
   return (
-    <div className="ev-card rounded-xl border border-border p-4">
+    <div className="ev-card rounded-[6px] border border-black/10 p-4">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="truncate text-[15px] font-semibold">{point.name}</h3>
-          <p className="mt-0.5 text-[12px] text-muted-foreground/70">{point.neighborhood}</p>
+          <p className="mt-0.5 text-[12px] #000000/70">{point.neighborhood}</p>
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
           {point.connectors.map((c) => (
@@ -88,7 +88,7 @@ function PointRow({
                 onClick={() => onPickHour(hour)}
                 disabled={st === "offline"}
                 className={cn(
-                  "group flex w-[54px] shrink-0 flex-col items-center gap-1 rounded-lg border py-2 transition-all",
+                  "group flex w-[54px] shrink-0 flex-col items-center gap-1 rounded-[6px] border py-2 transition-all",
                   s.cell,
                   selectedHour === hour && "ring-2 ring-foreground/70 ring-offset-1 ring-offset-background",
                   st !== "offline" && "hover:brightness-125 cursor-pointer",
@@ -99,7 +99,7 @@ function PointRow({
                   {night ? <Moon className="h-2.5 w-2.5" /> : <Sun className="h-2.5 w-2.5" />}
                   {String(hour).padStart(2, "0")}h
                 </span>
-                <span className="h-1 w-1 rounded-full bg-current opacity-70" />
+                <span className="h-1 w-1 rounded-[6px] bg-current opacity-70" />
               </button>
             );
           })}
@@ -122,11 +122,11 @@ function VagasContent() {
   return (
     <div className="mx-auto max-w-[1400px]">
       <div className="mb-6">
-        <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground/70">
+        <p className="text-[11px] font-medium uppercase tracking-[0.18em] #000000/70">
           Disponibilidade
         </p>
         <h1 className="mt-1.5 text-2xl font-semibold tracking-tight">Ver vaga pra carregar</h1>
-        <p className="mt-1 text-[13px] text-muted-foreground/70">
+        <p className="mt-1 text-[13px] #000000/70">
           Janelas do plano {current.name} · {PLAN_WINDOW_LABEL[plan]} · buffer de {BUFFER_MIN} min entre reservas
         </p>
       </div>
@@ -141,24 +141,24 @@ function VagasContent() {
               type="button"
               onClick={() => setPlan(id)}
               className={cn(
-                "ev-card rounded-xl border p-4 text-left transition-colors",
-                on ? "border-free/40" : "border-border hover:border-foreground/20",
+                "ev-card rounded-[6px] border p-4 text-left transition-colors",
+                on ? "#16a34a/40" : "border-black/10 hover:border-foreground/20",
               )}
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span
                     className={cn(
-                      "h-2 w-2 rounded-full",
+                      "h-2 w-2 rounded-[6px]",
                       id === "noturno" ? "bg-ac" : "bg-dc",
                     )}
                   />
                   <span className="text-[14px] font-semibold">{p.name}</span>
                 </div>
-                {on && <span className="text-[10px] uppercase tracking-[0.14em] text-free">Ativo</span>}
+                {on && <span className="text-[10px] uppercase tracking-[0.14em] #16a34a">Ativo</span>}
               </div>
-              <p className="mt-1 text-[12px] text-muted-foreground/70">{p.tagline}</p>
-              <p className="mt-2 font-mono text-[12px] text-muted-foreground/80">
+              <p className="mt-1 text-[12px] #000000/70">{p.tagline}</p>
+              <p className="mt-2 font-mono text-[12px] #000000/80">
                 Janela {PLAN_WINDOW_LABEL[id]} · {p.connectorKind} {id === "noturno" ? "7–22 kW" : "30–60 kW"}
               </p>
             </button>
@@ -171,10 +171,10 @@ function VagasContent() {
           type="button"
           onClick={() => setPointId(null)}
           className={cn(
-            "h-8 rounded-md border px-3 text-[12px] font-medium transition-colors",
+            "h-8 rounded-[6px] border px-3 text-[12px] font-medium transition-colors",
             pointId === null
-              ? "border-foreground/25 bg-foreground/[0.08] text-foreground"
-              : "border-border text-muted-foreground hover:text-foreground",
+              ? "border-foreground/25 bg-foreground/[0.08] #000000"
+              : "border-black/10 #000000 hover:#000000",
           )}
         >
           Todos os pontos
@@ -185,16 +185,16 @@ function VagasContent() {
             type="button"
             onClick={() => setPointId(p.id)}
             className={cn(
-              "h-8 rounded-md border px-3 text-[12px] font-medium transition-colors",
+              "h-8 rounded-[6px] border px-3 text-[12px] font-medium transition-colors",
               pointId === p.id
-                ? "border-foreground/25 bg-foreground/[0.08] text-foreground"
-                : "border-border text-muted-foreground hover:text-foreground",
+                ? "border-foreground/25 bg-foreground/[0.08] #000000"
+                : "border-black/10 #000000 hover:#000000",
             )}
           >
             {p.neighborhood}
           </button>
         ))}
-        <span className="ml-auto font-mono text-[12px] text-muted-foreground/70">
+        <span className="ml-auto font-mono text-[12px] #000000/70">
           horário: {String(hour).padStart(2, "0")}h
         </span>
       </div>
@@ -205,17 +205,17 @@ function VagasContent() {
         ))}
       </div>
 
-      <div className="mt-5 flex flex-col gap-3 rounded-xl border border-border bg-card/50 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-2.5 text-[12px] text-muted-foreground/80">
+      <div className="mt-5 flex flex-col gap-3 rounded-[6px] border border-black/10 #ffffff/50 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-2.5 text-[12px] #000000/80">
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-taken" />
           <p>
-            Você tem <span className="font-medium text-foreground">15 min de tolerância</span> depois do horário
+            Você tem <span className="font-medium #000000">15 min de tolerância</span> depois do horário
             reservado. Passou disso sem iniciar a carga, a vaga volta pra rede e pode gerar taxa de no-show.
           </p>
         </div>
         <Link
           href={pointId ? `/motorista/reservar?ponto=${pointId}&hora=${hour}` : "/motorista/reservar"}
-          className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md border border-free/30 bg-free/10 px-4 text-[13px] font-medium text-free transition-colors hover:bg-free/15"
+          className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-[6px] border #16a34a/30 #16a34a/10 px-4 text-[13px] font-medium #16a34a transition-colors hover:#16a34a/15"
         >
           <BatteryCharging className="h-4 w-4" />
           Reservar neste horário
@@ -229,7 +229,7 @@ function VagasContent() {
 export default function VagasPage() {
   return (
     <Shell scope="motorista">
-      <Suspense fallback={<div className="text-sm text-muted-foreground">Carregando…</div>}>
+      <Suspense fallback={<div className="text-sm #000000">Carregando…</div>}>
         <VagasContent />
       </Suspense>
     </Shell>

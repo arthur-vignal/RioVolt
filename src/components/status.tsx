@@ -3,75 +3,27 @@ import type { PointStatus } from "@/lib/mock-data";
 
 export const STATUS_STYLE: Record<
   PointStatus,
-  { label: string; dot: string; text: string; bg: string; border: string }
+  { label: string; chip: string; text: string; border: string }
 > = {
-  free: {
-    label: "Livre",
-    dot: "bg-free",
-    text: "text-free",
-    bg: "bg-free/10",
-    border: "border-free/30",
-  },
-  reserved: {
-    label: "Reservado",
-    dot: "bg-taken",
-    text: "text-taken",
-    bg: "bg-taken/10",
-    border: "border-taken/30",
-  },
-  in_use: {
-    label: "Em uso",
-    dot: "bg-busy",
-    text: "text-busy",
-    bg: "bg-busy/10",
-    border: "border-busy/30",
-  },
-  offline: {
-    label: "Fora de serviço",
-    dot: "bg-offline",
-    text: "text-offline",
-    bg: "bg-offline/10",
-    border: "border-offline/30",
-  },
+  free: { label: "Livre", chip: "bg-[#16a34a]/10 border-[#16a34a]/20", text: "text-[#16a34a]", border: "border-[#16a34a]/30" },
+  reserved: { label: "Reservado", chip: "bg-black/5 border-black/10", text: "text-black/70", border: "border-black/20" },
+  in_use: { label: "Em uso", chip: "bg-black border-black/10", text: "text-white", border: "border-black" },
+  offline: { label: "Fora de serviço", chip: "bg-black/5 border-black/10", text: "text-black/55", border: "border-black/10" },
 };
 
-export function StatusPill({
-  status,
-  className,
-}: {
-  status: PointStatus;
-  className?: string;
-}) {
+export function StatusPill({ status, className }: { status: PointStatus; className?: string }) {
   const s = STATUS_STYLE[status];
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium",
-        s.bg,
-        s.border,
-        s.text,
-        className,
-      )}
-    >
-      <span className={cn("h-1.5 w-1.5 rounded-full", s.dot)} />
+    <span className={cn("inline-flex items-center gap-1.5 rounded-[6px] border px-2.5 py-1 text-[12px] font-semibold", s.chip, s.text, className)}>
       {s.label}
     </span>
   );
 }
 
 export function KindBadge({ kind, powerKw }: { kind: "AC" | "DC"; powerKw: number }) {
-  const isDC = kind === "DC";
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide",
-        isDC
-          ? "border-dc/40 bg-dc/10 text-dc"
-          : "border-ac/40 bg-ac/10 text-ac",
-      )}
-    >
-      {kind}
-      <span className="opacity-70">{powerKw}kW</span>
+    <span className={cn("inline-flex items-center gap-1 rounded-[6px] border px-1.5 py-0.5 text-[11px] font-semibold", kind === "DC" ? "border-black/20 text-black" : "border-black/10 text-black/70")}>
+      {kind} <span className="opacity-70">{powerKw}kW</span>
     </span>
   );
 }
