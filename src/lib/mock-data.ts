@@ -1,4 +1,4 @@
-// Dados mock do EV Park. Fonte única de verdade das telas.
+// Dados mock da Voltrio. Fonte única de verdade das telas.
 // Números ancorados no trabalho "Estratégia Organizacional" (6 hubs no Rio).
 
 export type ChargerKind = "AC" | "DC";
