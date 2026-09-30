@@ -28,8 +28,8 @@ export function RealMap({ points }: { points: Point[] }) {
 
         L.control.zoom({ position: "bottomright" }).addTo(map);
 
-        L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-          attribution: "&copy; OpenStreetMap &copy; CARTO",
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: "&copy; OpenStreetMap",
           maxZoom: 19,
         }).addTo(map);
 
@@ -41,7 +41,7 @@ export function RealMap({ points }: { points: Point[] }) {
             p.connectors.find((c) => c.status === "free");
           const color =
             worst?.status === "free"
-              ? "text-[#16a34a]"
+              ? "#16a34a"
               : worst?.status === "offline"
                 ? "#9ca3af"
                 : "#111111";
@@ -87,7 +87,13 @@ export function RealMap({ points }: { points: Point[] }) {
 
   return (
     <div className="relative h-[420px] w-full overflow-hidden rounded-[6px] border border-black/10 bg-[#f8f9fa]">
-      <div ref={ref} className="absolute inset-0" />
+      <div
+        ref={ref}
+        className="absolute inset-0"
+        style={{
+          filter: "grayscale(0.82) contrast(1.05) brightness(1.03)",
+        }}
+      />
       {!ready ? (
         <div className="absolute inset-0 flex items-center justify-center bg-[#f8f9fa] text-[13px] text-black/55">
           Carregando mapa...
