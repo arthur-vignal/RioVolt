@@ -44,6 +44,8 @@ function getPool(): Pool {
   return _pool;
 }
 
+export { getPool };
+
 /**
  * Garante que o schema existe E a migration de emails está aplicada.
  * Lazy + idempotente + thread-safe.

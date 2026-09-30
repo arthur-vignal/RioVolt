@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Shell } from "@/app/(app)/layout-client";
-import { POINTS, freeCount, type Point } from "@/lib/mock-data";
+import { freeCount, type Point } from "@/lib/mock-data";
 import { StatusPill, KindBadge, STATUS_STYLE } from "@/components/status";
 import { RealMap } from "@/components/real-map";
 import { cn } from "@/lib/utils";
@@ -12,22 +12,43 @@ import { Clock, MapPin, ArrowRight, Filter } from "lucide-react";
 type FilterKind = "todos" | "AC" | "DC";
 type FilterFocus = "todos" | "moradores" | "motoristas";
 
+type ActiveCharge = { startedAt: number; kwhTarget: number };
+
 export default function PontosPage() {
   const [kind, setKind] = useState<FilterKind>("todos");
   const [focus, setFocus] = useState<FilterFocus>("todos");
+  const [points, setPoints] = useState<Point[]>([]);
+  const [activeCharges, setActiveCharges] = useState<Record<string, ActiveCharge>>({});
 
-  const points = useMemo(
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/points")
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data) => {
+        if (cancelled) return;
+        setPoints(data.points ?? []);
+        setActiveCharges(data.activeCharges ?? {});
+      })
+      .catch(() => {
+        // fallback silencioso: pontos vazios
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const filtered = useMemo(
     () =>
-      POINTS.filter((p) => {
+      points.filter((p) => {
         if (focus !== "todos" && p.focus !== focus) return false;
         if (kind !== "todos" && !p.connectors.some((c) => c.kind === kind)) return false;
         return true;
       }),
-    [kind, focus],
+    [points, kind, focus],
   );
 
-  const totalFree = POINTS.reduce((a, p) => a + freeCount(p), 0);
-  const totalConn = POINTS.reduce((a, p) => a + p.connectors.length, 0);
+  const totalFree = points.reduce((a, p) => a + freeCount(p), 0);
+  const totalConn = points.reduce((a, p) => a + p.connectors.length, 0);
 
   return (
     <Shell scope="motorista">
@@ -78,7 +99,7 @@ export default function PontosPage() {
         </div>
 
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-          <RealMap points={points} />
+          <RealMap points={filtered} chargeByConnector={activeCharges} />
 
           <div className="flex flex-col gap-3">
             {points.map((p) => {

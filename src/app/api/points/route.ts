@@ -1,74 +1,81 @@
+/**
+ * /api/points — Lista todos os hubs + conectores + sessões ativas (com estimativa
+ * de tempo livre).
+ *
+ * Retorno:
+ *   {
+ *     points: Point[] — com connectors inclusos
+ *     activeCharges: Record<connectorId, { startedAt: epochMs, kwhTarget: number }>
+ *   }
+ */
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
-import { createPoint, listPoints } from "@/lib/ops-db";
+import { listPoints } from "@/lib/db";
 
-export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type ChargerKind = "AC" | "DC";
-
-// POST /api/points — cria novo ponto de recarga.
-// body: { name, neighborhood, lat, lon, kind: 'AC'|'DC', powerKw, partner }
-export async function POST(req: Request) {
-  const body = (await req.json().catch(() => ({}))) as {
-    name?: string;
-    neighborhood?: string;
-    lat?: number;
-    lon?: number;
-    kind?: ChargerKind;
-    powerKw?: number;
-    partner?: string;
-  };
-
-  const { name, neighborhood, kind, partner } = body;
-  const lat = Number(body.lat);
-  const lon = Number(body.lon);
-  const powerKw = Number(body.powerKw);
-
-  if (!name || !neighborhood || !partner) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "Campos obrigatórios: name, neighborhood, partner.",
-      },
-      { status: 400 },
-    );
-  }
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-    return NextResponse.json(
-      { ok: false, error: "Latitude/longitude inválidas." },
-      { status: 400 },
-    );
-  }
-  if (kind !== "AC" && kind !== "DC") {
-    return NextResponse.json(
-      { ok: false, error: "Tipo do conector deve ser 'AC' ou 'DC'." },
-      { status: 400 },
-    );
-  }
-  if (!Number.isFinite(powerKw) || powerKw <= 0) {
-    return NextResponse.json(
-      { ok: false, error: "Potência (kW) inválida." },
-      { status: 400 },
-    );
-  }
-
-  const point = await createPoint({
-    name,
-    neighborhood,
-    lat,
-    lon,
-    kind,
-    powerKw,
-    partner,
-  });
-  revalidatePath("/donos/telemetria");
-  revalidatePath("/motorista/pontos");
-  return NextResponse.json({ ok: true, point });
-}
-
-// GET /api/points — lista pontos (debug).
 export async function GET() {
-  const points = await listPoints();
-  return NextResponse.json({ ok: true, points });
+  try {
+    const points = (await listPoints()) as unknown as Array<{
+      id: string;
+      name: string;
+      neighborhood: string;
+      focus: string;
+      address: string;
+      lat: number;
+      lon: number;
+      openHours: string;
+      partner: string;
+      connectors: Array<{
+        id: string;
+        pointId: string;
+        kind: "AC" | "DC";
+        powerKw: number;
+        status: "free" | "reserved" | "in_use" | "offline";
+        note?: string | null;
+      }>;
+    }>;
+
+    // Carrega charges ativas (startedAt e kwh planejado) para enriquecer o mapa
+    // com estimativa de tempo livre.
+    const activeCharges: Record<string, { startedAt: number; kwhTarget: number }> = {};
+    try {
+      const { getPool } = await import("@/lib/db-pg");
+      const pool = getPool();
+      const r = await pool.query<{
+        booking_id: string;
+        connector_id: string;
+        started_at: Date;
+        duration_min: number;
+        connector_power_kw: number;
+      }>(
+        `SELECT b.id AS booking_id, b.connector_id, c.started_at, b.duration_min,
+                cn.power_kw AS connector_power_kw
+         FROM bookings b
+         LEFT JOIN charges c ON c.booking_id = b.id
+         LEFT JOIN connectors cn ON cn.id = b.connector_id
+         WHERE b.status = 'in_use' AND c.ended_at IS NULL`,
+      );
+      for (const row of r.rows) {
+        if (!row.started_at) continue;
+        // kwh target: estimativa baseada no plano de carga médio de 22 kWh por
+        // hora de sessão. Para simplificar usamos duration_min * power_kW / 60.
+        const kwhTarget =
+          (row.duration_min * Number(row.connector_power_kw ?? 22)) / 60;
+        activeCharges[row.connector_id] = {
+          startedAt: new Date(row.started_at).getTime(),
+          kwhTarget,
+        };
+      }
+    } catch {
+      // pode falhar em SQLite dev (tabela charge não existe ainda). não crítico.
+    }
+
+    return NextResponse.json({ points, activeCharges });
+  } catch (err) {
+    console.error("[voltrio/api/points] error:", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "erro" },
+      { status: 500 },
+    );
+  }
 }
