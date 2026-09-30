@@ -597,6 +597,34 @@ export function findUserById(id: string): UserRow | undefined {
   return db().prepare("SELECT * FROM users WHERE id = ?").get(id) as UserRow | undefined;
 }
 
+export type CreateUserInput = {
+  id: string;
+  email: string;
+  role: "motorista" | "donos";
+  name: string;
+  plate: string | null;
+  car_model: string | null;
+  kwh_plan_limit: number | null;
+};
+
+export function createUser(input: CreateUserInput): UserRow {
+  const conn = db();
+  // bcrypt dummy password (signup real precisa de signin via Supabase Auth)
+  const dummyHash = "$2a$10$placeholder.hash.for.sqlite.local.only.not.used.for.login";
+  conn
+    .prepare(
+      `INSERT INTO users (id, email, role, name, plate, car_model, kwh_plan_limit, password_hash)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (email) DO NOTHING`
+    )
+    .run(input.id, input.email, input.role, input.name, input.plate, input.car_model, input.kwh_plan_limit, dummyHash);
+  const row = conn
+    .prepare("SELECT * FROM users WHERE email = ?")
+    .get(input.email.toLowerCase()) as UserRow | undefined;
+  if (!row) throw new Error("user_insert_failed");
+  return row;
+}
+
 /** Profile = user + plate/car_model. Retorna undefined se nao existe. */
 export function getProfile(userId: string): Profile | undefined {
   const u = findUserById(userId);

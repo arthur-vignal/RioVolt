@@ -178,10 +178,16 @@ export default function LoginPage() {
           </ul>
         </details>
 
-        <p className="mt-4 text-[12px] text-black/55">
-          Sessão em cookie HttpOnly (7 dias). Validação contra SQLite.
-        </p>
-      </div>
-    </main>
-  );
-}
+        <p className="mt-4 text-center text-[13px] text-black/60">
+                  Não tem conta?{" "}
+                  <a
+                    href="/signup"
+                    className="font-semibold text-[#16a34a] hover:underline"
+                  >
+                    Criar conta
+                  </a>
+                </p>
+              </div>
+            </main>
+          );
+        }

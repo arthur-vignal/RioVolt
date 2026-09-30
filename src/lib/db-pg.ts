@@ -451,6 +451,30 @@ export async function findUserById(id: string): Promise<UserRow | undefined> {
   return r.rows[0];
 }
 
+export type CreateUserInput = {
+  id: string;
+  email: string;
+  role: "motorista" | "donos";
+  name: string;
+  plate: string | null;
+  car_model: string | null;
+  kwh_plan_limit: number | null;
+};
+
+export async function createUser(input: CreateUserInput): Promise<UserRow> {
+  await getPool().query(
+    `INSERT INTO users (id, email, role, name, plate, car_model, kwh_plan_limit)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (email) DO NOTHING
+     RETURNING *`,
+    [input.id, input.email, input.role, input.name, input.plate, input.car_model, input.kwh_plan_limit],
+  );
+  // se conflict, retorna o existente
+  const existing = await findUserByEmail(input.email);
+  if (existing) return existing;
+  throw new Error("user_insert_failed");
+}
+
 export async function listAllUsers(): Promise<UserRow[]> {
   const r = await getPool().query<UserRow>("SELECT * FROM users ORDER BY role, name");
   return r.rows;

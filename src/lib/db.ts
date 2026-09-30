@@ -129,6 +129,18 @@ export function findUserByEmail(email: string) {
 export function findUserById(id: string) {
   return hasPg() ? pgMod.findUserById(id) : Promise.resolve(sqlite().findUserById(id));
 }
+export type CreateUserInput = {
+  id: string;
+  email: string;
+  role: "motorista" | "donos";
+  name: string;
+  plate: string | null;
+  car_model: string | null;
+  kwh_plan_limit: number | null;
+};
+export function createUser(input: CreateUserInput) {
+  return hasPg() ? pgMod.createUser(input) : sqlite().createUser(input);
+}
 export function verifyPassword(email: string, password: string) {
   return hasPg() ? pgMod.verifyPassword(email, password) : Promise.resolve(sqlite().verifyPassword(email, password));
 }
