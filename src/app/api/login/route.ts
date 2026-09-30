@@ -37,16 +37,16 @@ async function authenticateSupabase(
     return { ok: false, status: 500, error: "Supabase não configurado." };
   }
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  console.log("[voltrio/login] supabase.signInWithPassword result:", { hasUser: !!data.user, error: error?.message });
   if (error || !data.user) {
     return { ok: false, status: 401, error: "Credenciais inválidas." };
   }
-  // Mapeia o auth.user.id (UUID) → user.id local no Postgres. Como em prod o
-  // Postgres dispatcher usa o user.id direto, mantemos o auth.user.id. Em SQLite
-  // (dev), os IDs são determinísticos ("user-1"), mas supabase só roda em prod.
+  // Mapeia o auth.user.id (UUID) → user.id local no Postgres.
+  // Em prod o Postgres dispatcher usa o user.id direto, mantemos o auth.user.id.
   // Busca profile no banco local pra pegar nome/role/plate.
   const row = await getSubscriberByEmail(email);
+  console.log("[voltrio/login] getSubscriberByEmail result:", row ? { id: row.id, email: row.email, role: row.role } : null);
   if (!row) {
-    // usuário do supabase mas não existe no Postgres local
     return {
       ok: false,
       status: 403,
