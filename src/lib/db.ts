@@ -51,8 +51,9 @@ import {
 } from "@/lib/mock-data";
 
 // ---------------------------------------------------------------- paths
-
-const DATA_DIR = path.join(process.cwd(), ".data");
+// Em Railway, DATA_DIR=/data aponta pro volume persistente.
+// Em dev local, cai em <repo>/.data.
+const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), ".data");
 const DB_PATH = path.join(DATA_DIR, "voltrio.db");
 
 function ensureDataDir() {
