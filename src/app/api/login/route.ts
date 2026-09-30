@@ -14,7 +14,7 @@ type Body = {
 
 type AuthResult =
   | { ok: true; user: { id: string; name: string; email: string; role: "motorista" | "donos" } }
-  | { ok: false; error: string; status: 400 | 401 | 403 };
+  | { ok: false; error: string; status: 400 | 401 | 403 | 500 };
 
 async function authenticateLocal(email: string, password: string): Promise<AuthResult> {
   const row = await getSubscriberByEmail(email);
