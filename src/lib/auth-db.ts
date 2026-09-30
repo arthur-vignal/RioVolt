@@ -69,10 +69,10 @@ function toPublic(row: UserRow): PublicUser {
 /** Lista das credenciais demo exibidas na tela de login pra banca testar.
  *  Reflete exatamente o seed do db.ts. */
 export const DEMO_USERS: Array<{ email: string; name: string; role: Role }> = [
-  { email: "mariana@voltrio.local", name: "Mariana Souza", role: "motorista" },
-  { email: "rafael@voltrio.local", name: "Rafael Mendes", role: "motorista" },
-  { email: "carlos@voltrio.local", name: "Carlos Andrade", role: "motorista" },
-  { email: "dono@voltrio.local", name: "Bruno Tavares", role: "donos" },
+  { email: "mariana@voltrio.app", name: "Mariana Souza", role: "motorista" },
+  { email: "rafael@voltrio.app", name: "Rafael Mendes", role: "motorista" },
+  { email: "carlos@voltrio.app", name: "Carlos Andrade", role: "motorista" },
+  { email: "dono@voltrio.app", name: "Bruno Tavares", role: "donos" },
 ];
 
 export const DEMO_PASSWORD = "volta123";

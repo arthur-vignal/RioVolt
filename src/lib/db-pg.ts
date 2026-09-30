@@ -156,15 +156,20 @@ export async function seedIfEmpty(): Promise<void> {
   const pool = getPool();
   const r = await pool.query("SELECT COUNT(*)::int AS n FROM users");
   const n = (r.rows[0] as { n: number }).n;
-  if (n > 0) return;
+  // migration: emails demo antigos usam @voltrio.app (rejeitado pelo supabase).
+  // Renomeia pra @voltrio.app pra alinhar com as credenciais criadas no supabase auth.
+  if (n > 0) {
+    await pool.query("UPDATE users SET email = REPLACE(email, '@voltrio.app', '@voltrio.app') WHERE email LIKE '%@voltrio.app'");
+    return;
+  }
   const tx = await pool.connect();
   try {
     await tx.query("BEGIN");
     for (const u of [
-      { id: "user-1", email: "mariana@voltrio.local", role: "motorista", name: "Mariana Souza", plate: "RIO-2A19", car: "BYD Dolphin", plan: 200 },
-      { id: "user-2", email: "rafael@voltrio.local", role: "motorista", name: "Rafael Mendes", plate: "RIO-3B42", car: "Volvo EX30", plan: 200 },
-      { id: "user-3", email: "carlos@voltrio.local", role: "motorista", name: "Carlos Andrade", plate: "RIO-4C77", car: "Renault Kwid E-Tech", plan: 200 },
-      { id: "owner-1", email: "dono@voltrio.local", role: "donos", name: "Bruno Tavares", plate: null, car: null, plan: null },
+      { id: "user-1", email: "mariana@voltrio.app", role: "motorista", name: "Mariana Souza", plate: "RIO-2A19", car: "BYD Dolphin", plan: 200 },
+      { id: "user-2", email: "rafael@voltrio.app", role: "motorista", name: "Rafael Mendes", plate: "RIO-3B42", car: "Volvo EX30", plan: 200 },
+      { id: "user-3", email: "carlos@voltrio.app", role: "motorista", name: "Carlos Andrade", plate: "RIO-4C77", car: "Renault Kwid E-Tech", plan: 200 },
+      { id: "owner-1", email: "dono@voltrio.app", role: "donos", name: "Bruno Tavares", plate: null, car: null, plan: null },
     ]) {
       await tx.query(
         `INSERT INTO users (id,email,role,name,plate,car_model,kwh_plan_limit)

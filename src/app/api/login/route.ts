@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
-import { getSubscriberByEmail, verifyPassword } from "@/lib/auth-db";
 import { encodeSession, SESSION_COOKIE_NAME, SESSION_MAX_AGE } from "@/lib/session";
+import { isSupabaseEnabled, getSupabaseAnon } from "@/lib/supabase-server";
+import { getSubscriberByEmail, verifyPassword } from "@/lib/auth-db";
 
 // garante execução por-request (lê cookies)
 export const dynamic = "force-dynamic";
@@ -10,6 +11,53 @@ type Body = {
   password?: unknown;
   role?: unknown;
 };
+
+type AuthResult =
+  | { ok: true; user: { id: string; name: string; email: string; role: "motorista" | "donos" } }
+  | { ok: false; error: string; status: 400 | 401 | 403 };
+
+async function authenticateLocal(email: string, password: string): Promise<AuthResult> {
+  const row = await getSubscriberByEmail(email);
+  if (!row) return { ok: false, status: 401, error: "Credenciais inválidas." };
+  if (!(await verifyPassword(row, password))) {
+    return { ok: false, status: 401, error: "Credenciais inválidas." };
+  }
+  return {
+    ok: true,
+    user: { id: row.id, name: row.name, email: row.email, role: row.role },
+  };
+}
+
+async function authenticateSupabase(
+  email: string,
+  password: string,
+): Promise<AuthResult> {
+  const supabase = getSupabaseAnon();
+  if (!supabase) {
+    return { ok: false, status: 500, error: "Supabase não configurado." };
+  }
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error || !data.user) {
+    return { ok: false, status: 401, error: "Credenciais inválidas." };
+  }
+  // Mapeia o auth.user.id (UUID) → user.id local no Postgres. Como em prod o
+  // Postgres dispatcher usa o user.id direto, mantemos o auth.user.id. Em SQLite
+  // (dev), os IDs são determinísticos ("user-1"), mas supabase só roda em prod.
+  // Busca profile no banco local pra pegar nome/role/plate.
+  const row = await getSubscriberByEmail(email);
+  if (!row) {
+    // usuário do supabase mas não existe no Postgres local
+    return {
+      ok: false,
+      status: 403,
+      error: "Conta autenticada mas sem perfil cadastrado no app.",
+    };
+  }
+  return {
+    ok: true,
+    user: { id: row.id, name: row.name, email: row.email, role: row.role },
+  };
+}
 
 export async function POST(request: Request) {
   let body: Body;
@@ -33,31 +81,28 @@ export async function POST(request: Request) {
     );
   }
 
-  const row = await getSubscriberByEmail(email);
-  if (!row) {
-    return Response.json(
-      { ok: false, error: "Credenciais inválidas." },
-      { status: 401 },
-    );
+  // Estratégia: tenta Supabase se as env vars existirem, senão cai pra local.
+  // Em prod (DATABASE_URL + SUPABASE_URL), o Supabase é o caminho real.
+  // Em dev local sem Supabase configurado, usa o bcrypt local.
+  const useSupabase = isSupabaseEnabled();
+  const result = useSupabase
+    ? await authenticateSupabase(email, password)
+    : await authenticateLocal(email, password);
+
+  if (!result.ok) {
+    return Response.json({ ok: false, error: result.error }, { status: result.status });
   }
 
-  if (role && row.role !== role) {
+  if (role && result.user.role !== role) {
     return Response.json(
       { ok: false, error: `Esta conta não tem perfil ${role}.` },
       { status: 403 },
     );
   }
 
-  if (!(await verifyPassword(row, password))) {
-    return Response.json(
-      { ok: false, error: "Credenciais inválidas." },
-      { status: 401 },
-    );
-  }
-
   const token = encodeSession({
-    userId: row.id,
-    role: row.role,
+    userId: result.user.id,
+    role: result.user.role,
     iat: Math.floor(Date.now() / 1000),
   });
 
@@ -67,18 +112,8 @@ export async function POST(request: Request) {
     sameSite: "lax",
     path: "/",
     maxAge: SESSION_MAX_AGE,
-    // secure: true em produção (HTTPS). Em dev (http://localhost) deixamos false
-    // porque o cookie seria rejeitado pelo browser.
     secure: process.env.NODE_ENV === "production",
   });
 
-  return Response.json({
-    ok: true,
-    user: {
-      id: row.id,
-      name: row.name,
-      email: row.email,
-      role: row.role,
-    },
-  });
+  return Response.json({ ok: true, user: result.user });
 }

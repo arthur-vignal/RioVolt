@@ -194,19 +194,19 @@ function seed(conn: Database.Database) {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     );
     insertUser.run(
-      "user-1", "mariana@voltrio.local", "motorista", hash(DEMO_PASSWORD),
+      "user-1", "mariana@voltrio.app", "motorista", hash(DEMO_PASSWORD),
       "Mariana Souza", "RIO-2A19", "BYD Dolphin", 200
     );
     insertUser.run(
-      "user-2", "rafael@voltrio.local", "motorista", hash(DEMO_PASSWORD),
+      "user-2", "rafael@voltrio.app", "motorista", hash(DEMO_PASSWORD),
       "Rafael Mendes", "RIO-3B42", "Volvo EX30", 200
     );
     insertUser.run(
-      "user-3", "carlos@voltrio.local", "motorista", hash(DEMO_PASSWORD),
+      "user-3", "carlos@voltrio.app", "motorista", hash(DEMO_PASSWORD),
       "Carlos Andrade", "RIO-4C77", "Renault Kwid E-Tech", 200
     );
     insertUser.run(
-      "owner-1", "dono@voltrio.local", "donos", hash(DEMO_PASSWORD),
+      "owner-1", "dono@voltrio.app", "donos", hash(DEMO_PASSWORD),
       "Bruno Tavares", null, null, null
     );
 

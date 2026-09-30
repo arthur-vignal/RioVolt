@@ -7,10 +7,10 @@ import { VoltrioMark } from "@/components/nav";
 type Role = "motorista" | "donos";
 
 const DEMO_USERS: Array<{ email: string; name: string; role: Role }> = [
-  { email: "mariana@voltrio.local", name: "Mariana Souza", role: "motorista" },
-  { email: "rafael@voltrio.local", name: "Rafael Mendes", role: "motorista" },
-  { email: "carlos@voltrio.local", name: "Carlos Andrade", role: "motorista" },
-  { email: "dono@voltrio.local", name: "Bruno Tavares", role: "donos" },
+  { email: "mariana@voltrio.app", name: "Mariana Souza", role: "motorista" },
+  { email: "rafael@voltrio.app", name: "Rafael Mendes", role: "motorista" },
+  { email: "carlos@voltrio.app", name: "Carlos Andrade", role: "motorista" },
+  { email: "dono@voltrio.app", name: "Bruno Tavares", role: "donos" },
 ];
 
 const DEMO_PASSWORD = "volta123";
@@ -90,7 +90,7 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="voce@voltrio.local"
+              placeholder="voce@voltrio.app"
               className="w-full rounded-[6px] border border-black/10 bg-white px-3 py-2.5 text-[14px] outline-none focus:border-[#16a34a] focus:ring-2 focus:ring-[#16a34a]/20"
             />
           </label>
