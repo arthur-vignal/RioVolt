@@ -146,10 +146,7 @@ export function ChargeHistory({ showStartAction, title }: ChargeHistoryProps) {
       <section className="rounded-[6px] border border-black/10 bg-white p-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-black/70">
-              {title ?? "Histórico de recargas"}
-            </p>
-            <h2 className="mt-1.5 text-[15px] font-semibold">
+            <h2 className="text-[15px] font-semibold">
               {filtered.length} carga{filtered.length === 1 ? "" : "s"} no período
             </h2>
           </div>
@@ -187,7 +184,7 @@ export function ChargeHistory({ showStartAction, title }: ChargeHistoryProps) {
 
       <section className="overflow-hidden rounded-[6px] border border-black/10 bg-white">
         <table className="w-full border-collapse text-left text-[13px]">
-          <thead className="bg-[#f7f8f6] text-[11px] font-medium uppercase tracking-[0.16em] text-black/70">
+          <thead className="bg-[#f7f8f6] text-[11px] font-medium text-black/70">
             <tr>
               <th className="px-4 py-3 font-medium">Data</th>
               <th className="px-4 py-3 font-medium">Ponto</th>
@@ -249,10 +246,7 @@ export function ChargeHistory({ showStartAction, title }: ChargeHistoryProps) {
 
       {showStartAction && upcoming.length > 0 ? (
         <section className="rounded-[6px] border border-black/10 bg-white p-5">
-          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-black/70">
-            Reservas confirmadas
-          </p>
-          <h2 className="mt-1.5 text-[15px] font-semibold">
+          <h2 className="text-[15px] font-semibold">
             Prontas pra iniciar carga
           </h2>
           <ul className="mt-4 divide-y divide-black/10">
@@ -296,7 +290,7 @@ function Stat({
 }) {
   return (
     <div className="rounded-[6px] border border-black/10 bg-[#f7f8f6] p-3">
-      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.16em] text-black/60">
+      <div className="flex items-center gap-1.5 text-[11px] font-medium text-black/70">
         {icon}
         {label}
       </div>

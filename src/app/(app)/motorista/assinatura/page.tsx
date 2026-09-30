@@ -129,10 +129,7 @@ export default function AssinaturaPage() {
     <Shell scope="motorista">
       <div className="mx-auto max-w-[1200px]">
         <div className="mb-6">
-          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-black/70">
-            Minha conta
-          </p>
-          <h1 className="mt-1.5 text-2xl font-semibold tracking-tight">Assinatura</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Assinatura</h1>
           <p className="mt-1 text-[13px] text-black/70">
             Plano {current.name} desde {ME.since} · próxima cobrança em {ME.nextRenewal}
           </p>
@@ -143,7 +140,7 @@ export default function AssinaturaPage() {
             <section className="ev-card rounded-[6px] border border-black/10 p-5">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-black/70">
+                  <p className="text-[12px] font-medium text-black/70">
                     Consumo do ciclo
                   </p>
                   <div className="mt-1.5 flex items-baseline gap-2">

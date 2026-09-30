@@ -157,10 +157,7 @@ export function AgendamentosClient({
       <div className="mx-auto max-w-[1500px]">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-black/70">
-              Sistema de donos
-            </p>
-            <h1 className="mt-1.5 text-2xl font-semibold tracking-tight">
+            <h1 className="text-2xl font-semibold tracking-tight">
               Grade de agendamentos
             </h1>
             <p className="mt-1 flex items-center gap-1.5 text-[13px] capitalize text-black/70">
@@ -254,7 +251,7 @@ export function AgendamentosClient({
                   gridTemplateColumns: `72px repeat(${connectors.length}, minmax(0,1fr))`,
                 }}
               >
-                <div className="px-3 py-2.5 text-[10px] uppercase tracking-[0.16em] text-black/60">
+                <div className="px-3 py-2.5 text-[11px] font-medium text-black/70">
                   Hora
                 </div>
                 {connectors.map((c) => {

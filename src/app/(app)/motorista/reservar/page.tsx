@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, Suspense } from "react";
+import { useMemo, useState, Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Shell } from "@/app/(app)/layout-client";
@@ -36,15 +36,20 @@ type Step = "escolher" | "confirmar" | "feito";
 
 function ReservarContent() {
   const params = useSearchParams();
+  // Plano do usuário vem do ME (mock) por enquanto. Nao tem seletor.
+  const plan = ME.planId as PlanId;
   const [pointId, setPointId] = useState<string>(params.get("ponto") ?? "hub-1");
-  const [plan, setPlan] = useState<PlanId>(ME.planId);
+  const defaultHour = plan === "noturno" ? 22 : 12;
   const [hour, setHour] = useState<number>(
-    params.get("hora") ? Number(params.get("hora")) : 22,
+    params.get("hora") ? Number(params.get("hora")) : defaultHour,
   );
   const [step, setStep] = useState<Step>("escolher");
-  const [weekday, setWeekday] = useState(1); // recorrente semanal
+  const [weekday, setWeekday] = useState(1);
 
-  const point = useMemo(() => POINTS.find((p) => p.id === pointId) ?? POINTS[0], [pointId]);
+  const point = useMemo(
+    () => POINTS.find((p) => p.id === pointId) ?? POINTS[0],
+    [pointId],
+  );
   const current = PLAN_BY_ID[plan];
   const hours = plan === "noturno" ? NIGHT_HOURS : DAY_HOURS;
   const duration = plan === "noturno" ? 480 : 60;
@@ -54,11 +59,19 @@ function ReservarContent() {
   const overCost = overEstimate * current.overageRate;
   const totalToday = current.monthlyFee + overCost;
 
+  // Garante que, ao mudar de ponto com hora invalida pra esse plano,
+  // a hora default volta pro plano atual. So pra caso o deep link
+  // aponte hora fora da janela.
+  useEffect(() => {
+    if (!hours.includes(hour)) setHour(defaultHour);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan]);
+
   if (step === "feito") {
     return (
       <div className="mx-auto flex max-w-[620px] flex-col items-center py-10 text-center">
         <div className="flex h-16 w-16 items-center justify-center rounded-[6px] bg-[#16a34a]/15 ring-1 border-[#16a34a]/30">
-          <Check className="h-8 w-8 #16a34a" strokeWidth={2.5} />
+          <Check className="h-8 w-8 text-[#16a34a]" strokeWidth={2.5} />
         </div>
         <h1 className="mt-5 text-2xl font-semibold tracking-tight">Vaga reservada</h1>
         <p className="mt-2 text-[13px] text-black/80">
@@ -66,25 +79,23 @@ function ReservarContent() {
         </p>
 
         <div className="ev-card mt-6 w-full rounded-[6px] border border-black/10 p-5 text-left">
-          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-black/70">
-            Como ativar
-          </p>
+          <h2 className="text-[15px] font-semibold">Como ativar</h2>
           <ol className="mt-3 space-y-3">
             <li className="flex gap-3">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] #f2f3f2 text-[11px] font-semibold">1</span>
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] bg-[#f2f3f2] text-[11px] font-semibold">1</span>
               <p className="text-[13px] text-black/90">
                 Chegue no local dentro da janela. A trava só libera com você a menos de{" "}
                 <span className="text-black">{TOLERANCE_MIN} m</span> do ponto.
               </p>
             </li>
             <li className="flex gap-3">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] #f2f3f2 text-[11px] font-semibold">2</span>
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] bg-[#f2f3f2] text-[11px] font-semibold">2</span>
               <p className="text-[13px] text-black/90">
                 Escaneie o QR Code do painel do carregador ou aproxime o celular.
               </p>
             </li>
             <li className="flex gap-3">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] #f2f3f2 text-[11px] font-semibold">3</span>
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] bg-[#f2f3f2] text-[11px] font-semibold">3</span>
               <p className="text-[13px] text-black/90">
                 A carga começa e o kWh desconta da sua franquia. Excedente sai a{" "}
                 <span className="text-black">R$ {current.overageRate.toFixed(2).replace(".", ",")}/kWh</span>.
@@ -103,7 +114,7 @@ function ReservarContent() {
           </Link>
           <Link
             href="/motorista/assinatura"
-            className="inline-flex h-9 items-center gap-2 rounded-[6px] border border-[#16a34a]/30 bg-[#16a34a]/10 px-4 text-[13px] font-medium #16a34a transition-colors hover:bg-[#16a34a]/15"
+            className="inline-flex h-9 items-center gap-2 rounded-[6px] border border-[#16a34a]/30 bg-[#16a34a]/10 px-4 text-[13px] font-medium text-[#16a34a] transition-colors hover:bg-[#16a34a]/15"
           >
             Ver minha assinatura
           </Link>
@@ -115,10 +126,10 @@ function ReservarContent() {
   return (
     <div className="mx-auto max-w-[1100px]">
       <div className="mb-6">
-        <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-black/70">
-          Agendamento
+        <h1 className="text-2xl font-semibold tracking-tight">Reservar vaga</h1>
+        <p className="mt-1 text-[13px] text-black/70">
+          Plano {current.name} · janela {PLAN_WINDOW_LABEL[plan]}
         </p>
-        <h1 className="mt-1.5 text-2xl font-semibold tracking-tight">Reservar vaga</h1>
       </div>
 
       <ol className="mb-6 flex items-center gap-2 text-[12px]">
@@ -135,7 +146,7 @@ function ReservarContent() {
               <span
                 className={cn(
                   "flex h-6 w-6 items-center justify-center rounded-[6px] text-[11px] font-semibold",
-                  done ? "bg-[#16a34a]/10 text-[#16a34a]" : "#f2f3f2 text-black/60",
+                  done ? "bg-[#16a34a]/10 text-[#16a34a]" : "bg-[#f2f3f2] text-black/60",
                 )}
               >
                 {i + 1}
@@ -166,7 +177,7 @@ function ReservarContent() {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <span className="text-[13px] font-medium">{p.name}</span>
-                      {on && <Check className="h-3.5 w-3.5 shrink-0 #16a34a" />}
+                      {on && <Check className="h-3.5 w-3.5 shrink-0 text-[#16a34a]" />}
                     </div>
                     <p className="mt-1 text-[11px] text-black/70">{p.neighborhood}</p>
                     <div className="mt-2 flex flex-wrap gap-1">
@@ -181,31 +192,10 @@ function ReservarContent() {
           </section>
 
           <section className="ev-card rounded-[6px] border border-black/10 p-5">
-            <div className="flex items-center justify-between">
-              <h2 className="text-[13px] font-semibold">2. Janela de horário</h2>
-              <div className="inline-flex rounded-[6px] border border-black/10 p-0.5">
-                {(["noturno", "pro"] as PlanId[]).map((id) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => {
-                      setPlan(id);
-                      if (id === "noturno" && hour < 6) setHour(22);
-                      if (id === "pro" && (hour >= 20 || hour < 6)) setHour(12);
-                    }}
-                    className={cn(
-                      "rounded px-2.5 py-1 text-[11px] font-medium transition-colors",
-                      plan === id ? "#000000 text-background" : "text-black",
-                    )}
-                  >
-                    {PLAN_BY_ID[id].name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
+            <h2 className="text-[13px] font-semibold">2. Janela de horário</h2>
             <p className="mt-1.5 text-[12px] text-black/70">
-              Janela permitida: {PLAN_WINDOW_LABEL[plan]} · duração {duration >= 60 ? `${duration / 60}h` : `${duration} min`}
+              Janela permitida: {PLAN_WINDOW_LABEL[plan]} · duração{" "}
+              {duration >= 60 ? `${duration / 60}h` : `${duration} min`}
             </p>
 
             <div className="mt-4 grid grid-cols-6 gap-1.5 sm:grid-cols-8">
@@ -226,8 +216,8 @@ function ReservarContent() {
               ))}
             </div>
 
-            <div className="mt-4 flex items-start gap-2 rounded-[6px] border border-black/10 #f7f8f6/40 p-3">
-              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 #16a34a" />
+            <div className="mt-4 flex items-start gap-2 rounded-[6px] border border-black/10 bg-[#f7f8f6]/40 p-3">
+              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#16a34a]" />
               <p className="text-[12px] text-black/80">
                 Reserva fixa semanal, no mesmo conector, com{" "}
                 <span className="text-black">{BUFFER_MIN} min</span> de folga entre
@@ -244,7 +234,7 @@ function ReservarContent() {
                   className={cn(
                     "h-8 w-10 rounded-[6px] border text-[11px] font-medium transition-colors",
                     weekday === i
-                      ? "border-black/20 text-black/[0.08] text-black"
+                      ? "border-black/20 bg-black/[0.08] text-black"
                       : "border-black/10 text-black hover:text-black",
                   )}
                 >
@@ -284,22 +274,22 @@ function ReservarContent() {
                 <dd className="text-right font-medium">{TOLERANCE_MIN} min</dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt className="#000000/70">Plano</dt>
+                <dt className="text-black/70">Plano</dt>
                 <dd className="text-right font-medium">{current.name}</dd>
               </div>
             </dl>
 
             <div className="mt-4 space-y-2 border-t border-black/10 pt-4 text-[12px]">
               <div className="flex justify-between">
-                <span className="#000000/70">Mensalidade</span>
+                <span className="text-black/70">Mensalidade</span>
                 <span className="tabular-nums">R$ {current.monthlyFee.toFixed(2).replace(".", ",")}</span>
               </div>
               <div className="flex justify-between">
-                <span className="#000000/70">Franquia do plano</span>
+                <span className="text-black/70">Franquia do plano</span>
                 <span className="tabular-nums">{current.includedKwh} kWh</span>
               </div>
               <div className="flex justify-between">
-                <span className="#000000/70">Carga estimada</span>
+                <span className="text-black/70">Carga estimada</span>
                 <span className="tabular-nums">{estimateKwh} kWh</span>
               </div>
               {overEstimate > 0 && (
@@ -318,14 +308,24 @@ function ReservarContent() {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setStep(step === "escolher" ? "confirmar" : "feito")}
-              className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-[6px] bg-[#16a34a]/15 text-[13px] font-semibold #16a34a ring-1 border-[#16a34a]/30 transition-colors hover:bg-[#16a34a]/20"
-            >
-              {step === "escolher" ? "Revisar reserva" : "Confirmar reserva"}
-              <Check className="h-4 w-4" />
-            </button>
+            {step === "escolher" ? (
+              <button
+                type="button"
+                onClick={() => setStep("confirmar")}
+                className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-[6px] border border-[#16a34a]/30 bg-white text-[13px] font-semibold text-[#16a34a] transition-colors hover:bg-[#16a34a]/5"
+              >
+                Revisar reserva
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setStep("feito")}
+                className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-[6px] bg-[#16a34a] text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-[#15803d]"
+              >
+                Confirmar reserva
+                <Check className="h-4 w-4" />
+              </button>
+            )}
 
             <div className="mt-3 space-y-2">
               <p className="flex items-start gap-1.5 text-[11px] text-black/70">

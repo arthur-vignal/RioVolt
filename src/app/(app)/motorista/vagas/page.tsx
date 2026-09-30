@@ -1,8 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
 import Link from "next/link";
 import { Shell } from "@/app/(app)/layout-client";
 import {
@@ -11,6 +10,7 @@ import {
   PLAN_WINDOW_LABEL,
   BUFFER_MIN,
   isNight,
+  ME,
   type PlanId,
   type Point,
 } from "@/lib/mock-data";
@@ -43,7 +43,7 @@ function slotState(point: Point, plan: PlanId, hour: number): SlotState {
 const SLOT_STYLE: Record<SlotState, { cell: string; label: string }> = {
   free: { cell: "border-[#16a34a]/30 bg-[#16a34a]/10 text-[#16a34a]", label: "Livre" },
   tight: { cell: "border-busy/30 bg-busy/10 text-busy", label: "Última vaga" },
-  full: { cell: "border-black/10 #f2f3f2/40 text-black/50", label: "Ocupado" },
+  full: { cell: "border-black/10 bg-[#f2f3f2]/40 text-black/50", label: "Ocupado" },
   offline: { cell: "border-dashed border-black/10 bg-transparent text-black/35", label: "Fora da janela" },
 };
 
@@ -112,58 +112,24 @@ function PointRow({
 function VagasContent() {
   const params = useSearchParams();
   const preset = params.get("ponto");
-  const [plan, setPlan] = useState<PlanId>("noturno");
+  // Plano do usuario: nao tem seletor. Mostra so a janela do ME.planId.
+  const plan = ME.planId as PlanId;
   const [pointId, setPointId] = useState<string | null>(preset);
   const [hour, setHour] = useState(22);
 
-  const points = useMemo(() => (pointId ? POINTS.filter((p) => p.id === pointId) : POINTS), [pointId]);
+  const points = useMemo(
+    () => (pointId ? POINTS.filter((p) => p.id === pointId) : POINTS),
+    [pointId],
+  );
   const current = PLAN_BY_ID[plan];
 
   return (
     <div className="mx-auto max-w-[1400px]">
       <div className="mb-6">
-        <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-black/70">
-          Disponibilidade
-        </p>
-        <h1 className="mt-1.5 text-2xl font-semibold tracking-tight">Ver vaga pra carregar</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Ver vaga pra carregar</h1>
         <p className="mt-1 text-[13px] text-black/70">
           Janelas do plano {current.name} · {PLAN_WINDOW_LABEL[plan]} · buffer de {BUFFER_MIN} min entre reservas
         </p>
-      </div>
-
-      <div className="mb-5 grid gap-3 sm:grid-cols-2">
-        {(["noturno", "pro"] as PlanId[]).map((id) => {
-          const p = PLAN_BY_ID[id];
-          const on = plan === id;
-          return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setPlan(id)}
-              className={cn(
-                "ev-card rounded-[6px] border p-4 text-left transition-colors",
-                on ? "border-[#16a34a]/40" : "border-black/10 hover:border-black/20",
-              )}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={cn(
-                      "h-2 w-2 rounded-[6px]",
-                      id === "noturno" ? "bg-ac" : "bg-dc",
-                    )}
-                  />
-                  <span className="text-[14px] font-semibold">{p.name}</span>
-                </div>
-                {on && <span className="text-[10px] uppercase tracking-[0.14em] #16a34a">Ativo</span>}
-              </div>
-              <p className="mt-1 text-[12px] text-black/70">{p.tagline}</p>
-              <p className="mt-2 font-mono text-[12px] text-black/80">
-                Janela {PLAN_WINDOW_LABEL[id]} · {p.connectorKind} {id === "noturno" ? "7–22 kW" : "30–60 kW"}
-              </p>
-            </button>
-          );
-        })}
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -173,7 +139,7 @@ function VagasContent() {
           className={cn(
             "h-8 rounded-[6px] border px-3 text-[12px] font-medium transition-colors",
             pointId === null
-              ? "border-black/20 text-black/[0.08] text-black"
+              ? "border-black/20 bg-black/[0.08] text-black"
               : "border-black/10 text-black hover:text-black",
           )}
         >
@@ -187,7 +153,7 @@ function VagasContent() {
             className={cn(
               "h-8 rounded-[6px] border px-3 text-[12px] font-medium transition-colors",
               pointId === p.id
-                ? "border-black/20 text-black/[0.08] text-black"
+                ? "border-black/20 bg-black/[0.08] text-black"
                 : "border-black/10 text-black hover:text-black",
             )}
           >
@@ -205,7 +171,7 @@ function VagasContent() {
         ))}
       </div>
 
-      <div className="mt-5 flex flex-col gap-3 rounded-[6px] border border-black/10 #ffffff/50 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mt-5 flex flex-col gap-3 rounded-[6px] border border-black/10 bg-[#ffffff]/50 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-2.5 text-[12px] text-black/80">
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-taken" />
           <p>
@@ -215,7 +181,7 @@ function VagasContent() {
         </div>
         <Link
           href={pointId ? `/motorista/reservar?ponto=${pointId}&hora=${hour}` : "/motorista/reservar"}
-          className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-[6px] border border-[#16a34a]/30 bg-[#16a34a]/10 px-4 text-[13px] font-medium #16a34a transition-colors hover:bg-[#16a34a]/15"
+          className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-[6px] border border-[#16a34a]/30 bg-[#16a34a]/10 px-4 text-[13px] font-medium text-[#16a34a] transition-colors hover:bg-[#16a34a]/15"
         >
           <BatteryCharging className="h-4 w-4" />
           Reservar neste horário

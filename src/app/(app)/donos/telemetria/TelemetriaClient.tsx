@@ -208,10 +208,7 @@ export function TelemetriaClient({
       <div className="mx-auto max-w-[1400px]">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-black/70">
-              Sistema de donos
-            </p>
-            <h1 className="mt-1.5 text-2xl font-semibold tracking-tight">
+            <h1 className="text-2xl font-semibold tracking-tight">
               Telemetria de consumo
             </h1>
             <p className="mt-1 text-[13px] text-black/70">
@@ -288,7 +285,7 @@ export function TelemetriaClient({
                 className="ev-card rounded-[6px] border border-black/10 p-4"
               >
                 <div className="flex items-start justify-between">
-                  <p className="text-[11px] uppercase tracking-[0.16em] text-black/70">
+                  <p className="text-[12px] font-medium text-black/70">
                     {k.label}
                   </p>
                   <span
@@ -485,7 +482,7 @@ export function TelemetriaClient({
             <div className="space-y-5">
               {/* Preço kWh */}
               <div className="rounded-[6px] border border-black/10 p-4">
-                <h3 className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/70">
+                <h3 className="text-[13px] font-semibold text-black">
                   Preço por kWh
                 </h3>
                 <p className="mt-1 text-[11px] text-black/55">
@@ -522,7 +519,7 @@ export function TelemetriaClient({
 
               {/* Criar ponto */}
               <div className="rounded-[6px] border border-black/10 p-4">
-                <h3 className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/70">
+                <h3 className="text-[13px] font-semibold text-black">
                   Novo ponto de recarga
                 </h3>
                 <p className="mt-1 text-[11px] text-black/55">
@@ -567,7 +564,7 @@ export function TelemetriaClient({
                     onChange={(v) => setNp({ ...np, powerKw: v })}
                   />
                   <div className="col-span-2">
-                    <label className="text-[10px] font-medium uppercase tracking-[0.12em] text-black/60">
+                    <label className="text-[11px] font-medium text-black/70">
                       Tipo do conector
                     </label>
                     <div className="mt-1.5 inline-flex items-center gap-1 rounded-[6px] border border-black/10 p-0.5">
@@ -633,7 +630,7 @@ function Field({
 }) {
   return (
     <div>
-      <label className="text-[10px] font-medium uppercase tracking-[0.12em] text-black/60">
+      <label className="text-[11px] font-medium text-black/70">
         {label}
       </label>
       <Input

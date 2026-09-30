@@ -110,10 +110,14 @@ export function RealMap({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
+  const layerRef = useRef<any>(null);
   const [ready, setReady] = useState(false);
 
+  // 1) Cria o mapa UMA vez, depois que os pontos chegam.
   useEffect(() => {
     if (!ref.current || mapRef.current) return;
+    if (points.length === 0) return;
+
     let cancelled = false;
 
     (async () => {
@@ -141,47 +145,8 @@ export function RealMap({
           }
         ).addTo(map);
 
-        points.forEach((p) => {
-          const worst: Connector | undefined =
-            p.connectors.find((c) => c.status === "offline") ||
-            p.connectors.find((c) => c.status === "in_use") ||
-            p.connectors.find((c) => c.status === "reserved") ||
-            p.connectors.find((c) => c.status === "free");
-          const color =
-            worst?.status === "free"
-              ? "#16a34a"
-              : worst?.status === "offline"
-              ? "#9ca3af"
-              : "#111111";
-
-          const marker = L.circleMarker([p.lat, p.lon], {
-            radius: 9,
-            color,
-            weight: 2,
-            opacity: 1,
-            fillColor: "#ffffff",
-            fillOpacity: 1,
-          }).addTo(map);
-
-          // Tooltip simples no hover
-          marker.bindTooltip(`${p.name}\n${p.neighborhood}`, {
-            direction: "top",
-            offset: [0, -4],
-          });
-
-          // Popup com lista de conectores
-          marker.bindPopup(buildPopupHtml(p, chargeByConnector), {
-            maxWidth: 280,
-            closeButton: true,
-            autoPan: true,
-          });
-        });
-
-        map.fitBounds(
-          // @ts-ignore
-          L.latLngBounds(points.map((p) => [p.lat, p.lon])).pad(0.25),
-          { animate: false }
-        );
+        // Camada de marcadores (limpa a cada re-render dos pontos).
+        layerRef.current = L.layerGroup().addTo(map);
 
         mapRef.current = map;
         setReady(true);
@@ -192,14 +157,83 @@ export function RealMap({
 
     return () => {
       cancelled = true;
+    };
+  }, [points.length === 0]);
+
+  // 2) Re-renderiza os markers sempre que a lista de pontos (ou charges)
+  //    mudar. O mapa em si persiste.
+  useEffect(() => {
+    const map = mapRef.current;
+    const layer = layerRef.current;
+    if (!map || !layer) return;
+    if (points.length === 0) return;
+
+    let cancelled = false;
+
+    (async () => {
+      const L = (await import("leaflet")).default;
+      if (cancelled || !map || !layer) return;
+
+      layer.clearLayers();
+
+      points.forEach((p) => {
+        const worst: Connector | undefined =
+          p.connectors.find((c) => c.status === "offline") ||
+          p.connectors.find((c) => c.status === "in_use") ||
+          p.connectors.find((c) => c.status === "reserved") ||
+          p.connectors.find((c) => c.status === "free");
+        const color =
+          worst?.status === "free"
+            ? "#16a34a"
+            : worst?.status === "offline"
+            ? "#9ca3af"
+            : "#111111";
+
+        const marker = L.circleMarker([p.lat, p.lon], {
+          radius: 9,
+          color,
+          weight: 2,
+          opacity: 1,
+          fillColor: "#ffffff",
+          fillOpacity: 1,
+        }).addTo(layer);
+
+        marker.bindTooltip(`${p.name}\n${p.neighborhood}`, {
+          direction: "top",
+          offset: [0, -4],
+        });
+
+        marker.bindPopup(buildPopupHtml(p, chargeByConnector), {
+          maxWidth: 280,
+          closeButton: true,
+          autoPan: true,
+        });
+      });
+
+      map.fitBounds(
+        // @ts-ignore
+        L.latLngBounds(points.map((p) => [p.lat, p.lon])).pad(0.25),
+        { animate: false }
+      );
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [points, JSON.stringify(chargeByConnector)]);
+
+  // Cleanup geral quando o componente desmonta.
+  useEffect(() => {
+    return () => {
       if (mapRef.current) {
         try {
           mapRef.current.remove();
         } catch {}
         mapRef.current = null;
+        layerRef.current = null;
       }
     };
-  }, [points, JSON.stringify(chargeByConnector)]);
+  }, []);
 
   return (
     <div className="relative h-[420px] w-full overflow-hidden rounded-[6px] border border-black/10 bg-[#f8f9fa]">

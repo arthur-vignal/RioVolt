@@ -11,10 +11,7 @@ export default function HistoricoPage() {
       <div className="mx-auto max-w-[1100px]">
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-black/70">
-              Recargas
-            </p>
-            <h1 className="mt-1.5 flex items-center gap-2 text-2xl font-semibold tracking-tight">
+            <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
               <HistoryIcon className="h-5 w-5 text-[#16a34a]" />
               Histórico de recargas
             </h1>

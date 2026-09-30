@@ -67,7 +67,7 @@ export default function PontosPage() {
                         /{p.connectors.length}
                       </span>
                     </div>
-                    <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-black/55">
+                    <div className="mt-1 text-[10px] font-semibold text-black/55">
                       livres
                     </div>
                   </div>

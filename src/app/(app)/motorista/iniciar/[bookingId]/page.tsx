@@ -230,9 +230,6 @@ export default function IniciarCargaPage({
               <ArrowLeft className="h-4 w-4" />
             </Link>
             <div>
-              <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-black/60">
-                Iniciar carga
-              </p>
               <h1 className="text-[15px] font-semibold leading-tight tracking-tight">
                 {point.name}
               </h1>
@@ -297,10 +294,7 @@ export default function IniciarCargaPage({
         {phase === "idle" && booking.status !== "done" ? (
           <section className="mt-5 rounded-[6px] border border-black/10 bg-white p-6">
             <div className="flex flex-col items-center text-center">
-              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-black/70">
-                Escaneie o QR Code
-              </p>
-              <h2 className="mt-1.5 text-[18px] font-semibold tracking-tight">
+              <h2 className="text-[18px] font-semibold tracking-tight">
                 Apresente este código no painel do conector
               </h2>
               <div className="mt-5">
@@ -449,7 +443,7 @@ function Metric({
 }) {
   return (
     <div className="rounded-[6px] border border-black/10 bg-[#f7f8f6] p-3 text-center">
-      <div className="flex items-center justify-center gap-1 text-[10px] uppercase tracking-[0.16em] text-black/60">
+      <div className="flex items-center justify-center gap-1 text-[11px] font-medium text-black/70">
         {icon}
         {label}
       </div>
@@ -463,7 +457,7 @@ function Metric({
 function Res({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-[6px] border border-black/10 bg-[#f7f8f6] p-3">
-      <dt className="text-[10px] uppercase tracking-[0.16em] text-black/60">
+      <dt className="text-[11px] font-medium text-black/70">
         {label}
       </dt>
       <dd className="mt-1 text-[14px] font-semibold tabular-nums">{value}</dd>

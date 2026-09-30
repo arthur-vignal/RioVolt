@@ -115,10 +115,7 @@ export function AssinantesClient({ initialSubscribers }: Props) {
     <Shell scope="donos">
       <div className="mx-auto max-w-[1400px]">
         <div className="mb-5">
-          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-black/70">
-            Sistema de donos
-          </p>
-          <h1 className="mt-1.5 text-2xl font-semibold tracking-tight">
+          <h1 className="text-2xl font-semibold tracking-tight">
             Assinantes
           </h1>
           <p className="mt-1 text-[13px] text-black/70">
@@ -168,7 +165,7 @@ export function AssinantesClient({ initialSubscribers }: Props) {
                 className="ev-card rounded-[6px] border border-black/10 p-4"
               >
                 <div className="flex items-start justify-between">
-                  <p className="text-[11px] uppercase tracking-[0.16em] text-black/70">
+                  <p className="text-[12px] font-medium text-black/70">
                     {k.label}
                   </p>
                   <span
@@ -236,7 +233,7 @@ export function AssinantesClient({ initialSubscribers }: Props) {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[960px] border-collapse text-left">
               <thead>
-                <tr className="border-b border-black/10 text-[10px] uppercase tracking-[0.16em] text-black/60">
+                <tr className="border-b border-black/10 text-[11px] font-medium text-black/70">
                   <th className="px-4 py-3 font-medium">Assinante</th>
                   <th className="px-4 py-3 font-medium">Plano</th>
                   <th className="px-4 py-3 font-medium">Status</th>
@@ -341,7 +338,7 @@ export function AssinantesClient({ initialSubscribers }: Props) {
                           >
                             <span className="block h-4 w-4 rounded-full bg-white shadow-sm" />
                           </button>
-                          <span className="text-[10px] uppercase tracking-[0.12em] text-black/55">
+                          <span className="text-[11px] text-black/55">
                             {isAtivo ? "liberado" : isInad ? "bloqueado" : "—"}
                           </span>
                           {/* Cancelar definitivo */}

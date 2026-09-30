@@ -23,7 +23,6 @@ export function Shell({ scope, children }: { scope: Scope; children: ReactNode }
           <SideNav scope={scope} onLogout={handleLogout} />
         </div>
         <div className="space-y-1 border-t border-black/10 pt-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#16a34a]">Rede piloto</p>
           <p className="text-[12px] leading-5 text-black/60">6 hubs no Rio · 12 conectores<br/>8 AC noturno · 4 DC rápido</p>
         </div>
       </aside>

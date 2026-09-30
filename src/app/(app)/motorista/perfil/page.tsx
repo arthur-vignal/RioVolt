@@ -124,10 +124,7 @@ export default function PerfilPage() {
       <div className="mx-auto max-w-[1100px]">
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-black/60">
-              Identificação
-            </p>
-            <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-black">Meu perfil</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-black">Meu perfil</h1>
             <p className="mt-1 text-[13px] text-black/60">
               Dados pessoais e do veículo cadastrados na Voltrio.
             </p>
@@ -149,7 +146,7 @@ export default function PerfilPage() {
                 <UserCircle2 className="h-6 w-6" strokeWidth={2} aria-hidden="true" />
               </div>
               <div className="min-w-0">
-                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-black/60">
+                <p className="text-[12px] font-medium text-black/60">
                   {ROLE_LABEL[profile.role]}
                 </p>
                 <h2 className="truncate text-[18px] font-semibold tracking-tight text-black">
@@ -320,7 +317,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="block text-[11px] font-medium uppercase tracking-[0.16em] text-black/60">
+      <span className="block text-[12px] font-medium text-black/70">
         {label}
       </span>
       <input
