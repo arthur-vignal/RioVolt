@@ -1,0 +1,43 @@
+# Build artifacts
+.next/
+out/
+build/
+dist/
+
+# Local data (SQLite dev)
+.data/
+
+# Node modules (reinstalado dentro da imagem)
+node_modules/
+
+# Deps de dev/coverage/logs
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# Env files
+.env
+.env.local
+.env.*.local
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+.github/
+
+# Testes que rodam cache e travam o build
+test-results/
+playwright-report/
+
+# Hermes / agent scaffolding
+.hermes/
+CLAUDE.md
+AGENTS.md

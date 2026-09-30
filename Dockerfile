@@ -9,15 +9,15 @@
 FROM node:22-bookworm-slim AS base
 WORKDIR /app
 
-# deps nativas que o buildkit às vezes precisa (ex: better-sqlite3 opcional)
+# deps nativas (better-sqlite3 opcional via optionalDependencies)
 RUN apt-get update -y && apt-get install -y --no-install-recommends \
     python3 make g++ openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
 # --- deps layer (cacheado) ---
 FROM base AS deps
-COPY package.json package-lock.json* ./
-RUN npm ci --no-audit --no-fund
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund --include=optional
 
 # --- build layer ---
 FROM base AS builder
@@ -35,6 +35,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+# Railway injeta $PORT dinamicamente. Default 3000 pra local.
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
@@ -51,4 +52,5 @@ COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 USER nextjs
 EXPOSE 3000
 
-CMD ["node_modules/.bin/next", "start", "-p", "3000"]
+# start.sh sobrescreve $PORT (railway) na chamada do next start
+CMD ["sh", "-c", "node_modules/.bin/next start -p ${PORT:-3000}"]
