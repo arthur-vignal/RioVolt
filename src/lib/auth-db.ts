@@ -1,22 +1,20 @@
-// auth-db.ts — Ponte sobre o banco SQLite principal (src/lib/db.ts).
-// O subagent #1 (db) e o subagent #2 (auth) divergiram: db.ts tem users com
-// bcrypt, auth-db.ts tem users com scrypt. Pra evitar dois bancos divergentes,
-// este módulo delega TUDO ao db.ts e re-expõe a API que o subagent #2 construiu.
+// auth-db.ts — Ponte sobre a fachada db.ts.
 //
-// Senha demo: "volta123" para todos os usuários.
-//
-// API pública:
+// API:
 //   listAllSubscribers()              → PublicUser[]
 //   getSubscriberByEmail(email)       → UserRow | null
 //   getSubscriberById(id)             → PublicUser | null
 //   verifyPassword(row, password)     → boolean
 //   DEMO_USERS                        → lista de credenciais demo
 //   DEMO_PASSWORD                     → string
-//
-// Esta camada é provisória: numa próxima fase o db.ts assume auth+ops e este
-// arquivo vira um simples re-export.
 
 import type { UserRow } from "@/lib/db";
+import {
+  findUserByEmail,
+  findUserById,
+  listAllUsers,
+  verifyPassword as dbVerifyPassword,
+} from "@/lib/db";
 
 export type Role = "motorista" | "donos";
 
@@ -31,29 +29,25 @@ export type PublicUser = {
 export type { UserRow } from "@/lib/db";
 
 export async function listAllSubscribers(): Promise<PublicUser[]> {
-  const { listAllUsers } = require("@/lib/db") as typeof import("@/lib/db");
   const users = await listAllUsers();
   return users.map(toPublic);
 }
 
 export async function getSubscriberByEmail(email: string): Promise<UserRow | null> {
-  const { findUserByEmail } = require("@/lib/db") as typeof import("@/lib/db");
   const normalized = email.trim().toLowerCase();
   const row = await findUserByEmail(normalized);
   return row ?? null;
 }
 
 export async function getSubscriberById(id: string): Promise<PublicUser | null> {
-  const { findUserById } = require("@/lib/db") as typeof import("@/lib/db");
-  const row = (await findUserById(id)) as unknown as UserRow | undefined;
+  const row = await findUserById(id);
   return row ? toPublic(row) : null;
 }
 
 export async function verifyPassword(row: UserRow, password: string): Promise<boolean> {
-  const { verifyPassword: dbVerify } = require("@/lib/db") as typeof import("@/lib/db");
   // db.ts tem verifyPassword(email, password) -> UserRow | null.
   // Mantemos a assinatura antiga passando email + senha:
-  const result = await dbVerify(row.email, password);
+  const result = await dbVerifyPassword(row.email, password);
   return result !== null;
 }
 
