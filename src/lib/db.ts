@@ -45,16 +45,46 @@ function pg(): PgModule {
 }
 
 function sqlite(): SqliteModule {
-  if (!_sqlite) {
+  if (_sqlite !== null) return _sqlite;
+  try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     _sqlite = require("./db-sqlite") as SqliteModule;
+    return _sqlite;
+  } catch (err) {
+    // Em produção sem DATABASE_URL, better-sqlite3 (optional) não está
+    // instalado. Em vez de crashar o app, devolve stubs que retornam
+    // vazio/zero — assim as telas (Páginas) abrem mesmo sem backend.
+    console.error(
+      "[voltrio/db] better-sqlite3 não disponível (production sem DATABASE_URL). " +
+      "Voltando para stubs vazios.",
+      err instanceof Error ? err.message : err,
+    );
+    _sqlite = createEmptySqliteStub();
+    return _sqlite;
   }
-  return _sqlite;
 }
 
 // ---------------------------------------------------------------- delegates
 // Cada função abaixo delega pro backend certo, normalizando a Promise
 // (sqlite já é síncrono, então empacotamos em Promise.resolve quando necessário).
+
+/**
+ * Stub vazio pra SQLite. Usado em prod quando DATABASE_URL não está setada
+ * e better-sqlite3 (optional) não foi instalado. Tudo retorna vazio/undefined,
+ * exceto initSeed (no-op). As páginas do app continuam abrindo em modo leitura
+ * — sem dados persistentes — em vez de crashar.
+ */
+const emptyStub: SqliteModule = new Proxy({} as SqliteModule, {
+  get(_target, prop: string) {
+    if (prop === "initSeed") return () => undefined;
+    // Qualquer função chamada devolve o "empty default" adequado ao tipo dela.
+    return (..._args: unknown[]) => undefined;
+  },
+}) as SqliteModule;
+
+function createEmptySqliteStub(): SqliteModule {
+  return emptyStub;
+}
 
 export type UserRow = {
   id: string;
