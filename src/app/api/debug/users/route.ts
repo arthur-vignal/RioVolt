@@ -4,17 +4,20 @@
  */
 import { NextResponse } from "next/server";
 import { ensureSchema } from "@/lib/db-pg";
-import { getPool } from "@/lib/db-pg";
+import { listAllUsers } from "@/lib/db-pg";
 
 export async function GET() {
   try {
     await ensureSchema();
-    const r = await getPool().query(
-      "SELECT id, email, role, name FROM users ORDER BY id",
-    );
+    const users = await listAllUsers();
     return NextResponse.json({
-      count: r.rows.length,
-      users: r.rows,
+      count: users.length,
+      users: users.map((u: { id: string; email: string; role: string; name: string }) => ({
+        id: u.id,
+        email: u.email,
+        role: u.role,
+        name: u.name,
+      })),
     });
   } catch (err) {
     return NextResponse.json(
