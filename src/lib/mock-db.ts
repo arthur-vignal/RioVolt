@@ -37,10 +37,10 @@ export async function getSnapshot(): Promise<DbSnapshot> {
     listBookingsForDay("today"),
   ]);
   return {
-    points,
+    points: points as unknown as Point[],
     plans: PLANS,
-    subscribers,
-    bookings,
+    subscribers: subscribers as unknown as Subscriber[],
+    bookings: bookings as unknown as Booking[],
     me: ME,
     telemetry: TELEMETRY_30D,
   };

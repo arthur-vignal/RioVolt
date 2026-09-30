@@ -28,39 +28,138 @@
  *   initSeed
  */
 
-const HAS_PG = !!process.env.DATABASE_URL;
-
-type PgModule = typeof import("./db-pg");
-type SqliteModule = typeof import("./db-sqlite");
-
-let _pg: PgModule | null = null;
-let _sqlite: SqliteModule | null = null;
-
-function pg(): PgModule {
-  if (!_pg) {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    _pg = require("./db-pg") as PgModule;
-  }
-  return _pg;
+// Avalia DATABASE_URL em CADA chamada — não em build-time.
+// (Turbopack faria inlining se fosse const, quebrando prod sem env em build.)
+function hasPg(): boolean {
+  return !!process.env.DATABASE_URL;
 }
 
+import {
+  initSchema as pgInitSchema,
+  listPoints as pgListPoints,
+  listConnectors as pgListConnectors,
+  listBookingsForDay as pgListBookingsForDay,
+  getSubscriberByEmail as pgGetSubscriberByEmail,
+  listAllSubscribers as pgListAllSubscribers,
+  listAllUsers as pgListAllUsers,
+  findUserByEmail as pgFindUserByEmail,
+  findUserById as pgFindUserById,
+  verifyPassword as pgVerifyPassword,
+  getProfile as pgGetProfile,
+  updateProfile as pgUpdateProfile,
+  getBooking as pgGetBooking,
+  getPoint as pgGetPoint,
+  listBookingsForUser as pgListBookingsForUser,
+  listChargesForUser as pgListChargesForUser,
+  getCharge as pgGetCharge,
+  createBooking as pgCreateBooking,
+  cancelBooking as pgCancelBooking,
+  updateBookingStatus as pgUpdateBookingStatus,
+  incrementSubscriptionKwh as pgIncrementSubscriptionKwh,
+  updateSubscriberStatus as pgUpdateSubscriberStatus,
+  updateSubscriberStatusByName as pgUpdateSubscriberStatusByName,
+  incrementKwhByName as pgIncrementKwhByName,
+  updateConnectorStatus as pgUpdateConnectorStatus,
+  createPoint as pgCreatePoint,
+  getSetting as pgGetSetting,
+  getSettingNumber as pgGetSettingNumber,
+  setSetting as pgSetSetting,
+  startCharge as pgStartCharge,
+  createReservation as pgCreateReservation,
+    ensureSchema as pgEnsureSchema,
+    seedIfEmpty as pgSeedIfEmpty,
+  } from "./db-pg";
+
+type PgModule = {
+  pgInitSchema: typeof pgInitSchema;
+  pgListPoints: typeof pgListPoints;
+  pgListConnectors: typeof pgListConnectors;
+  pgListBookingsForDay: typeof pgListBookingsForDay;
+  pgGetSubscriberByEmail: typeof pgGetSubscriberByEmail;
+  pgListAllSubscribers: typeof pgListAllSubscribers;
+  pgListAllUsers: typeof pgListAllUsers;
+  pgFindUserByEmail: typeof pgFindUserByEmail;
+  pgFindUserById: typeof pgFindUserById;
+  pgVerifyPassword: typeof pgVerifyPassword;
+  pgGetProfile: typeof pgGetProfile;
+  pgUpdateProfile: typeof pgUpdateProfile;
+  pgGetBooking: typeof pgGetBooking;
+  pgGetPoint: typeof pgGetPoint;
+  pgListBookingsForUser: typeof pgListBookingsForUser;
+  pgListChargesForUser: typeof pgListChargesForUser;
+  pgGetCharge: typeof pgGetCharge;
+  pgCreateBooking: typeof pgCreateBooking;
+  pgCancelBooking: typeof pgCancelBooking;
+  pgUpdateBookingStatus: typeof pgUpdateBookingStatus;
+  pgIncrementSubscriptionKwh: typeof pgIncrementSubscriptionKwh;
+  pgUpdateSubscriberStatus: typeof pgUpdateSubscriberStatus;
+  pgUpdateSubscriberStatusByName: typeof pgUpdateSubscriberStatusByName;
+  pgIncrementKwhByName: typeof pgIncrementKwhByName;
+  pgUpdateConnectorStatus: typeof pgUpdateConnectorStatus;
+  pgCreatePoint: typeof pgCreatePoint;
+  pgGetSetting: typeof pgGetSetting;
+  pgGetSettingNumber: typeof pgGetSettingNumber;
+  pgSetSetting: typeof pgSetSetting;
+  pgStartCharge: typeof pgStartCharge;
+  pgCreateReservation: typeof pgCreateReservation;
+};
+
+function pg(): PgModule {
+  return {
+    pgInitSchema,
+    pgListPoints,
+    pgListConnectors,
+    pgListBookingsForDay,
+    pgGetSubscriberByEmail,
+    pgListAllSubscribers,
+    pgListAllUsers,
+    pgFindUserByEmail,
+    pgFindUserById,
+    pgVerifyPassword,
+    pgGetProfile,
+    pgUpdateProfile,
+    pgGetBooking,
+    pgGetPoint,
+    pgListBookingsForUser,
+    pgListChargesForUser,
+    pgGetCharge,
+    pgCreateBooking,
+    pgCancelBooking,
+    pgUpdateBookingStatus,
+    pgIncrementSubscriptionKwh,
+    pgUpdateSubscriberStatus,
+    pgUpdateSubscriberStatusByName,
+    pgIncrementKwhByName,
+    pgUpdateConnectorStatus,
+    pgCreatePoint,
+    pgGetSetting,
+    pgGetSettingNumber,
+    pgSetSetting,
+    pgStartCharge,
+    pgCreateReservation,
+  };
+}
+
+// Type-only import for the SQLite fallback module signature.
+// O sqlite nunca é executado em prod (HAS_PG é true), então é só type.
+type SqliteModule = typeof import("./db-sqlite");
+
 function sqlite(): SqliteModule {
-  if (_sqlite !== null) return _sqlite;
+  // Lazy load com require() pra não avaliar o módulo sqlite estaticamente
+  // (better-sqlite3 não está instalado em prod). Usar string indireta
+  // impede o Turbopack de fazer tree-shake agressivo e perder a referência.
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    _sqlite = require("./db-sqlite") as SqliteModule;
-    return _sqlite;
+    const path = ["..", "lib", "db-sqlite"].join("/");
+    const m = require(path) as SqliteModule;
+    return m;
   } catch (err) {
-    // Em produção sem DATABASE_URL, better-sqlite3 (optional) não está
-    // instalado. Em vez de crashar o app, devolve stubs que retornam
-    // vazio/zero — assim as telas (Páginas) abrem mesmo sem backend.
     console.error(
       "[voltrio/db] better-sqlite3 não disponível (production sem DATABASE_URL). " +
       "Voltando para stubs vazios.",
       err instanceof Error ? err.message : err,
     );
-    _sqlite = createEmptySqliteStub();
-    return _sqlite;
+    return createEmptySqliteStub();
   }
 }
 
@@ -123,62 +222,62 @@ export type { Point, Connector, Booking, Subscriber, Subscription, DayPoint } fr
 
 // ----- init -----
 export async function initSeed(): Promise<void> {
-  if (HAS_PG) {
-    await pg().initSchema();
-    await pg().seedIfEmpty();
+  if (hasPg()) {
+    await pgInitSchema();
+    await pgSeedIfEmpty();
   } else {
     sqlite().initSeed();
   }
 }
 
 // ----- reads -----
-export async function listPoints() {
-  return HAS_PG ? pg().listPoints() : Promise.resolve(sqlite().listPoints());
+export async function listPoints(): Promise<unknown> {
+  return hasPg() ? pgListPoints() : Promise.resolve(sqlite().listPoints());
 }
-export async function listConnectors() {
-  return HAS_PG ? pg().listConnectors() : Promise.resolve(sqlite().listConnectors());
+export async function listConnectors(): Promise<unknown> {
+  return hasPg() ? pgListConnectors() : Promise.resolve(sqlite().listConnectors());
 }
-export async function listBookingsForDay(date: string) {
-  return HAS_PG ? pg().listBookingsForDay(date) : Promise.resolve(sqlite().listBookingsForDay(date));
+export async function listBookingsForDay(date: string): Promise<unknown> {
+  return hasPg() ? pgListBookingsForDay(date) : Promise.resolve(sqlite().listBookingsForDay(date));
 }
 export async function getSubscriberByEmail(email: string) {
-  return HAS_PG ? pg().getSubscriberByEmail(email) : Promise.resolve(sqlite().getSubscriberByEmail(email));
+  return hasPg() ? pgGetSubscriberByEmail(email) : Promise.resolve(sqlite().getSubscriberByEmail(email));
 }
-export async function listAllSubscribers() {
-  return HAS_PG ? pg().listAllSubscribers() : Promise.resolve(sqlite().listAllSubscribers());
+export async function listAllSubscribers(): Promise<unknown> {
+  return hasPg() ? pgListAllSubscribers() : Promise.resolve(sqlite().listAllSubscribers());
 }
-export async function listAllUsers() {
-  return HAS_PG ? pg().listAllUsers() : Promise.resolve(sqlite().listAllUsers());
+export async function listAllUsers(): Promise<unknown> {
+  return hasPg() ? pgListAllUsers() : Promise.resolve(sqlite().listAllUsers());
 }
-export async function findUserByEmail(email: string) {
-  return HAS_PG ? pg().findUserByEmail(email) : Promise.resolve(sqlite().findUserByEmail(email));
+export async function findUserByEmail(email: string): Promise<unknown> {
+  return hasPg() ? pgFindUserByEmail(email) : Promise.resolve(sqlite().findUserByEmail(email));
 }
-export async function findUserById(id: string) {
-  return HAS_PG ? pg().findUserById(id) : Promise.resolve(sqlite().findUserById(id));
+export async function findUserById(id: string): Promise<unknown> {
+  return hasPg() ? pgFindUserById(id) : Promise.resolve(sqlite().findUserById(id));
 }
-export async function verifyPassword(email: string, password: string) {
-  return HAS_PG ? pg().verifyPassword(email, password) : Promise.resolve(sqlite().verifyPassword(email, password));
+export async function verifyPassword(email: string, password: string): Promise<unknown> {
+  return hasPg() ? pgVerifyPassword(email, password) : Promise.resolve(sqlite().verifyPassword(email, password));
 }
-export async function getProfile(userId: string) {
-  return HAS_PG ? pg().getProfile(userId) : Promise.resolve(sqlite().getProfile(userId));
+export async function getProfile(userId: string): Promise<unknown> {
+  return hasPg() ? pgGetProfile(userId) : Promise.resolve(sqlite().getProfile(userId));
 }
-export async function updateProfile(userId: string, patch: { name?: string; plate?: string; vehicle?: string }) {
-  return HAS_PG ? pg().updateProfile(userId, patch) : sqlite().updateProfile(userId, patch);
+export async function updateProfile(userId: string, patch: { name?: string; plate?: string; vehicle?: string }): Promise<unknown> {
+  return hasPg() ? pgUpdateProfile(userId, patch) : sqlite().updateProfile(userId, patch);
 }
-export async function getBooking(id: string) {
-  return HAS_PG ? pg().getBooking(id) : Promise.resolve(sqlite().getBooking(id));
+export async function getBooking(id: string): Promise<unknown> {
+  return hasPg() ? pgGetBooking(id) : Promise.resolve(sqlite().getBooking(id));
 }
-export async function getPoint(id: string) {
-  return HAS_PG ? pg().getPoint(id) : Promise.resolve(sqlite().getPoint(id));
+export async function getPoint(id: string): Promise<unknown> {
+  return hasPg() ? pgGetPoint(id) : Promise.resolve(sqlite().getPoint(id));
 }
-export async function listBookingsForUser(userId: string) {
-  return HAS_PG ? pg().listBookingsForUser(userId) : Promise.resolve(sqlite().listBookingsForUser(userId));
+export async function listBookingsForUser(userId: string): Promise<unknown> {
+  return hasPg() ? pgListBookingsForUser(userId) : Promise.resolve(sqlite().listBookingsForUser(userId));
 }
-export async function listChargesForUser(userId: string) {
-  return HAS_PG ? pg().listChargesForUser(userId) : Promise.resolve(sqlite().listChargesForUser(userId));
+export async function listChargesForUser(userId: string): Promise<unknown> {
+  return hasPg() ? pgListChargesForUser(userId) : Promise.resolve(sqlite().listChargesForUser(userId));
 }
-export async function getCharge(bookingId: string) {
-  return HAS_PG ? pg().getCharge(bookingId) : Promise.resolve(sqlite().getCharge(bookingId));
+export async function getCharge(bookingId: string): Promise<unknown> {
+  return hasPg() ? pgGetCharge(bookingId) : Promise.resolve(sqlite().getCharge(bookingId));
 }
 
 // ----- writes -----
@@ -188,29 +287,29 @@ export async function createBooking(input: {
   plan: "noturno" | "pro";
   startHour: number;
   durationMin: number;
-}) {
-  return HAS_PG ? pg().createBooking(input) : sqlite().createBooking(input);
+}): Promise<unknown> {
+  return hasPg() ? pgCreateBooking(input) : sqlite().createBooking(input);
 }
-export async function cancelBooking(id: string) {
-  return HAS_PG ? pg().cancelBooking(id) : sqlite().cancelBooking(id);
+export async function cancelBooking(id: string): Promise<unknown> {
+  return hasPg() ? pgCancelBooking(id) : sqlite().cancelBooking(id);
 }
-export async function updateBookingStatus(id: string, status: Booking["status"]) {
-  return HAS_PG ? pg().updateBookingStatus(id, status) : sqlite().updateBookingStatus(id, status);
+export async function updateBookingStatus(id: string, status: Booking["status"]): Promise<unknown> {
+  return hasPg() ? pgUpdateBookingStatus(id, status) : sqlite().updateBookingStatus(id, status);
 }
-export async function incrementSubscriptionKwh(subId: number, kwh: number) {
-  return HAS_PG ? pg().incrementSubscriptionKwh(subId, kwh) : sqlite().incrementSubscriptionKwh(subId, kwh);
+export async function incrementSubscriptionKwh(subId: number, kwh: number): Promise<unknown> {
+  return hasPg() ? pgIncrementSubscriptionKwh(subId, kwh) : sqlite().incrementSubscriptionKwh(subId, kwh);
 }
-export async function updateSubscriberStatus(id: number, status: Subscriber["status"]) {
-  return HAS_PG ? pg().updateSubscriberStatus(id, status) : sqlite().updateSubscriberStatus(id, status);
+export async function updateSubscriberStatus(id: number, status: Subscriber["status"]): Promise<unknown> {
+  return hasPg() ? pgUpdateSubscriberStatus(id, status) : sqlite().updateSubscriberStatus(id, status);
 }
-export async function updateSubscriberStatusByName(name: string, status: Subscriber["status"]) {
-  return HAS_PG ? pg().updateSubscriberStatusByName(name, status) : sqlite().updateSubscriberStatusByName(name, status);
+export async function updateSubscriberStatusByName(name: string, status: Subscriber["status"]): Promise<unknown> {
+  return hasPg() ? pgUpdateSubscriberStatusByName(name, status) : sqlite().updateSubscriberStatusByName(name, status);
 }
-export async function incrementKwhByName(name: string, delta: number) {
-  return HAS_PG ? pg().incrementKwhByName(name, delta) : sqlite().incrementKwhByName(name, delta);
+export async function incrementKwhByName(name: string, delta: number): Promise<unknown> {
+  return hasPg() ? pgIncrementKwhByName(name, delta) : sqlite().incrementKwhByName(name, delta);
 }
-export async function updateConnectorStatus(connectorId: string, status: Connector["status"]) {
-  return HAS_PG ? pg().updateConnectorStatus(connectorId, status) : sqlite().updateConnectorStatus(connectorId, status);
+export async function updateConnectorStatus(connectorId: string, status: Connector["status"]): Promise<unknown> {
+  return hasPg() ? pgUpdateConnectorStatus(connectorId, status) : sqlite().updateConnectorStatus(connectorId, status);
 }
 export async function createPoint(input: {
   name: string;
@@ -220,20 +319,20 @@ export async function createPoint(input: {
   kind: Connector["kind"];
   powerKw: number;
   partner: string;
-}) {
-  return HAS_PG ? pg().createPoint(input) : sqlite().createPoint(input);
+}): Promise<unknown> {
+  return hasPg() ? pgCreatePoint(input) : sqlite().createPoint(input);
 }
-export async function getSetting(key: string) {
-  return HAS_PG ? pg().getSetting(key) : Promise.resolve(sqlite().getSetting(key));
+export async function getSetting(key: string): Promise<string | null> {
+  return hasPg() ? pgGetSetting(key) : Promise.resolve(sqlite().getSetting(key));
 }
-export async function getSettingNumber(key: string) {
-  return HAS_PG ? pg().getSettingNumber(key) : Promise.resolve(sqlite().getSettingNumber(key));
+export async function getSettingNumber(key: string): Promise<number | null> {
+  return hasPg() ? pgGetSettingNumber(key) : Promise.resolve(sqlite().getSettingNumber(key));
 }
-export async function setSetting(key: string, value: string | number) {
-  return HAS_PG ? pg().setSetting(key, value) : sqlite().setSetting(key, value);
+export async function setSetting(key: string, value: string | number): Promise<unknown> {
+  return hasPg() ? pgSetSetting(key, value) : sqlite().setSetting(key, value);
 }
-export async function startCharge(input: { userId: string; bookingId: string }) {
-  return HAS_PG ? pg().startCharge(input) : sqlite().startCharge(input);
+export async function startCharge(input: { userId: string; bookingId: string }): Promise<unknown> {
+  return hasPg() ? pgStartCharge(input) : sqlite().startCharge(input);
 }
 export async function createReservation(input: {
   userId: string;
@@ -242,8 +341,8 @@ export async function createReservation(input: {
   planId: "noturno" | "pro";
   start: number;
   durationMin: number;
-}) {
-  return HAS_PG ? pg().createReservation(input) : sqlite().createReservation(input);
+}): Promise<unknown> {
+  return hasPg() ? pgCreateReservation(input) : sqlite().createReservation(input);
 }
 
 

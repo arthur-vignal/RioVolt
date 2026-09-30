@@ -45,7 +45,7 @@ export async function getSubscriberByEmail(email: string): Promise<UserRow | nul
 
 export async function getSubscriberById(id: string): Promise<PublicUser | null> {
   const { findUserById } = require("@/lib/db") as typeof import("@/lib/db");
-  const row = await findUserById(id);
+  const row = (await findUserById(id)) as unknown as UserRow | undefined;
   return row ? toPublic(row) : null;
 }
 
