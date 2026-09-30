@@ -12,6 +12,8 @@ import {
   Users,
   Gauge,
   LogOut,
+  UserCircle2,
+  History,
 } from "lucide-react";
 
 export type Scope = "motorista" | "donos";
@@ -28,6 +30,8 @@ export const NAV: NavItem[] = [
   { href: "/motorista/vagas", label: "Disponibilidade", icon: Layers, scope: "motorista" },
   { href: "/motorista/reservar", label: "Reservar", icon: CalendarCheck, scope: "motorista" },
   { href: "/motorista/assinatura", label: "Assinatura", icon: CreditCard, scope: "motorista" },
+  { href: "/motorista/historico", label: "Histórico", icon: History, scope: "motorista" },
+  { href: "/motorista/perfil", label: "Perfil", icon: UserCircle2, scope: "motorista" },
   { href: "/donos/agendamentos", label: "Agenda", icon: LayoutGrid, scope: "donos" },
   { href: "/donos/assinantes", label: "Assinantes", icon: Users, scope: "donos" },
   { href: "/donos/telemetria", label: "Telemetria", icon: Gauge, scope: "donos" },

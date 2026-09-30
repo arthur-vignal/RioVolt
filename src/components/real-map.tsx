@@ -28,10 +28,14 @@ export function RealMap({ points }: { points: Point[] }) {
 
         L.control.zoom({ position: "bottomright" }).addTo(map);
 
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          attribution: "&copy; OpenStreetMap",
-          maxZoom: 19,
-        }).addTo(map);
+        L.tileLayer(
+          "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+          {
+            attribution:
+              "Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ, TomTom, Intermap, iPC, USGS, FAO, NPS, NRCAN, GeoBase, Kadaster NL, Ordnance Survey, Esri Japan, METI, Esri China (Hong Kong), and the GIS User Community",
+            maxZoom: 16,
+          }
+        ).addTo(map);
 
         points.forEach((p) => {
           const worst =
@@ -87,13 +91,7 @@ export function RealMap({ points }: { points: Point[] }) {
 
   return (
     <div className="relative h-[420px] w-full overflow-hidden rounded-[6px] border border-black/10 bg-[#f8f9fa]">
-      <div
-        ref={ref}
-        className="absolute inset-0"
-        style={{
-          filter: "grayscale(0.82) contrast(1.05) brightness(1.03)",
-        }}
-      />
+      <div ref={ref} className="absolute inset-0" />
       {!ready ? (
         <div className="absolute inset-0 flex items-center justify-center bg-[#f8f9fa] text-[13px] text-black/55">
           Carregando mapa...

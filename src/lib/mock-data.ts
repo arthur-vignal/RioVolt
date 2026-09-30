@@ -220,7 +220,7 @@ export type Booking = {
   start: number;
   /** duração em minutos */
   durationMin: number;
-  status: "confirmed" | "pending" | "cancelled" | "no_show" | "done";
+  status: "confirmed" | "pending" | "cancelled" | "no_show" | "done" | "in_progress";
 };
 
 const h = (v: number) => {
