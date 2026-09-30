@@ -116,15 +116,17 @@ export async function initSchema(): Promise<void> {
     );
 
     CREATE TABLE IF NOT EXISTS subscriptions (
-      id            SERIAL PRIMARY KEY,
-      user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      plan          TEXT NOT NULL CHECK (plan IN ('noturno','pro')),
-      kwh_used      DOUBLE PRECISION NOT NULL DEFAULT 0,
-      monthly_fee   DOUBLE PRECISION NOT NULL,
-      since         TEXT NOT NULL,
-      next_renewal  TEXT NOT NULL,
-      payment_ok    BOOLEAN NOT NULL DEFAULT TRUE
-    );
+          id            SERIAL PRIMARY KEY,
+          user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          plan          TEXT NOT NULL CHECK (plan IN ('noturno','pro')),
+          kwh_used      DOUBLE PRECISION NOT NULL DEFAULT 0,
+          monthly_fee   DOUBLE PRECISION NOT NULL,
+          since         TEXT NOT NULL,
+          next_renewal  TEXT NOT NULL,
+          payment_ok    BOOLEAN NOT NULL DEFAULT TRUE,
+          cycle_start   TIMESTAMPTZ NOT NULL DEFAULT date_trunc('month', now()),
+          cupons_ac_used INTEGER NOT NULL DEFAULT 0
+        );
 
     CREATE TABLE IF NOT EXISTS subscribers (
       id            SERIAL PRIMARY KEY,
@@ -156,22 +158,38 @@ export async function initSchema(): Promise<void> {
 
     INSERT INTO settings (key, value) VALUES ('kwhPrice', '2.04')
       ON CONFLICT (key) DO NOTHING;
-  `);
-  // ensure default 'in_progress' exists in CHECK (post-migration safety)
-  await pool.query(`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-        SELECT 1 FROM information_schema.table_constraints
-        WHERE constraint_name = 'bookings_status_check'
-      ) THEN
-        ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_status_check;
-        ALTER TABLE bookings ADD CONSTRAINT bookings_status_check
-          CHECK (status IN ('confirmed','pending','cancelled','no_show','done','in_progress'));
-      END IF;
-    END$$;
-  `).catch(() => {});
-}
+    `);
+    // ensure default 'in_progress' exists in CHECK (post-migration safety)
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.table_constraints
+          WHERE constraint_name = 'bookings_status_check'
+        ) THEN
+          ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_status_check;
+          ALTER TABLE bookings ADD CONSTRAINT bookings_status_check
+            CHECK (status IN ('confirmed','pending','cancelled','no_show','done','in_progress'));
+        END IF;
+      END$$;
+    `).catch(() => {});
+
+    // Migration idempotente: adiciona cupons_ac_used + cycle_start se faltarem.
+    // Banco ja criado em deploy anterior fica sem essas colunas. ADD COLUMN
+    // com IF NOT EXISTS e DEFAULT seguro nao quebra dados existentes.
+    await pool.query(`
+      ALTER TABLE subscriptions
+        ADD COLUMN IF NOT EXISTS cupons_ac_used INTEGER NOT NULL DEFAULT 0;
+    `).catch((err) => {
+      console.error("[voltrio/db-pg] falha ao adicionar cupons_ac_used:", err instanceof Error ? err.message : err);
+    });
+    await pool.query(`
+      ALTER TABLE subscriptions
+        ADD COLUMN IF NOT EXISTS cycle_start TIMESTAMPTZ NOT NULL DEFAULT date_trunc('month', now());
+    `).catch((err) => {
+      console.error("[voltrio/db-pg] falha ao adicionar cycle_start:", err instanceof Error ? err.message : err);
+    });
+  }
 
 // ---------------------------------------------------------------- seed
 
@@ -627,12 +645,51 @@ export async function createBooking(input: {
   );
   if (conflict.rows.length > 0) throw new Error(`connector_busy:${input.connectorId}`);
 
-  const connRow = await pool.query<{ point_id: string }>(
-    "SELECT point_id FROM connectors WHERE id = $1",
+  const connRow = await pool.query<{ point_id: string; kind: ChargerKind }>(
+    "SELECT c.point_id, c.kind FROM connectors c WHERE c.id = $1",
     [input.connectorId],
   );
   const pointId = connRow.rows[0]?.point_id;
   if (!pointId) throw new Error(`connector_not_found:${input.connectorId}`);
+  const connectorKind = connRow.rows[0]?.kind;
+
+  // Regra Pro Plus 150: cada reserva em conector AC consome 1 cupom de R$20
+  // (isencao da tarifa de estacionamento). Limite mensal: 6.
+  // DC nao consome cupom.
+  if (input.plan === "pro" && connectorKind === "AC") {
+    await ensureSchema();
+    const subR = await pool.query<{ id: number; cupons_ac_used: number; cycle_start: string }>(
+      `SELECT id, cupons_ac_used, cycle_start
+       FROM subscriptions WHERE user_id = $1
+       ORDER BY id DESC LIMIT 1`,
+      [input.userId],
+    );
+    const sub = subR.rows[0];
+    if (!sub) throw new Error("cupons_no_subscription");
+    const cycleStart = new Date(sub.cycle_start);
+    const now = new Date();
+    const sameCycle =
+      cycleStart.getUTCFullYear() === now.getUTCFullYear() &&
+      cycleStart.getUTCMonth() === now.getUTCMonth();
+    const used = sameCycle ? Number(sub.cupons_ac_used) : 0;
+    if (used >= 6) {
+      throw new Error("cupons_ac_esgotados");
+    }
+    if (!sameCycle) {
+      // reseta cycle_start + cupons ao iniciar novo ciclo
+      await pool.query(
+        `UPDATE subscriptions
+            SET cycle_start = date_trunc('month', now()),
+                cupons_ac_used = 0
+          WHERE id = $1`,
+        [sub.id],
+      );
+    }
+    await pool.query(
+      "UPDATE subscriptions SET cupons_ac_used = cupons_ac_used + 1 WHERE id = $1",
+      [sub.id],
+    );
+  }
 
   const id = `b-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
   await pool.query(
@@ -707,6 +764,10 @@ export type SubscriptionRow = {
   since: string;
   nextRenewal: string;
   paymentOk: boolean;
+  /** início do ciclo de cobrança atual (ISO). */
+  cycleStart: string | null;
+  /** quantos cupons de isenção R$20 em vagas AC foram consumidos no ciclo. */
+  cuponsACUsed: number;
 };
 
 function rowToSubscription(r: {
@@ -718,6 +779,8 @@ function rowToSubscription(r: {
   since: string;
   next_renewal: string;
   payment_ok: boolean;
+  cycle_start?: string | Date;
+  cupons_ac_used?: number | string;
 }): SubscriptionRow {
   return {
     id: r.id,
@@ -728,6 +791,8 @@ function rowToSubscription(r: {
     since: r.since,
     nextRenewal: r.next_renewal,
     paymentOk: r.payment_ok,
+    cycleStart: r.cycle_start ? new Date(r.cycle_start).toISOString() : null,
+    cuponsACUsed: Number(r.cupons_ac_used ?? 0),
   };
 }
 
@@ -735,7 +800,8 @@ function rowToSubscription(r: {
 export async function getSubscriptionByUserId(userId: string): Promise<SubscriptionRow | null> {
   const pool = getPool();
   const r = await pool.query(
-    `SELECT id, user_id, plan, kwh_used, monthly_fee, since, next_renewal, payment_ok
+    `SELECT id, user_id, plan, kwh_used, monthly_fee, since, next_renewal, payment_ok,
+            cycle_start, cupons_ac_used
      FROM subscriptions WHERE user_id = $1 ORDER BY id DESC LIMIT 1`,
     [userId],
   );

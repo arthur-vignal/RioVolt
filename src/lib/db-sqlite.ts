@@ -173,8 +173,26 @@ function createSchema(conn: Database.Database) {
       value TEXT NOT NULL
     );
     INSERT OR IGNORE INTO settings (key, value) VALUES ('kwhPrice', '2.04');
-  `);
-}
+    `);
+
+  // Migration idempotente: bancos criados antes da coluna cycle_start /
+  // cupons_ac_used serem adicionadas precisam de ALTER. try/catch tolera o
+  // caso "column already exists" ou "duplicate column name" sem explodir.
+    try {
+      conn.exec(
+        "ALTER TABLE subscriptions ADD COLUMN cycle_start TEXT NOT NULL DEFAULT (datetime('now', 'start of month'))",
+      );
+    } catch {
+      /* coluna já existe */
+    }
+    try {
+      conn.exec(
+        "ALTER TABLE subscriptions ADD COLUMN cupons_ac_used INTEGER NOT NULL DEFAULT 0",
+      );
+    } catch {
+      /* coluna já existe */
+    }
+  }
 
 // ---------------------------------------------------------------- seed
 
@@ -468,16 +486,60 @@ export function createBooking(input: CreateBookingInput): Booking {
     throw new Error(`connector_busy:${data.connectorId}`);
   }
 
+  // descobrir point_id + kind do conector antes de qualquer coisa (tambem
+  // usado pra validar regra do plano Pro Plus 150 com cupons AC)
+  const connInfo = conn
+    .prepare("SELECT point_id, kind FROM connectors WHERE id = ?")
+    .get(data.connectorId) as { point_id: string; kind: ChargerKind } | undefined;
+  if (!connInfo) throw new Error(`connector_not_found:${data.connectorId}`);
+
+  // Regra Pro Plus 150: cada reserva em conector AC consome 1 cupom de R$20
+  // (isencao da tarifa de estacionamento). Limite mensal: 6.
+  // DC nao consome cupom. Noturno nunca consome (plano noturno).
+  if (data.plan === "pro" && connInfo.kind === "AC") {
+    const sub = conn
+      .prepare(
+        `SELECT id, cupons_ac_used, cycle_start
+         FROM subscriptions WHERE user_id = ?
+         ORDER BY id DESC LIMIT 1`,
+      )
+      .get(data.userId) as
+      | { id: number; cupons_ac_used: number; cycle_start: string }
+      | undefined;
+    if (!sub) throw new Error("cupons_no_subscription");
+    // cycle_start = "YYYY-MM-DD HH:MM:SS" do SQLite (UTC).
+    // Mes/ano atuais — se diferente do cycle_start, zera o contador.
+    const now = new Date();
+    const csDate = new Date(sub.cycle_start.replace(" ", "T") + "Z");
+    const sameCycle =
+      csDate.getUTCFullYear() === now.getUTCFullYear() &&
+      csDate.getUTCMonth() === now.getUTCMonth();
+    const used = sameCycle ? Number(sub.cupons_ac_used) : 0;
+    if (used >= 6) {
+      throw new Error("cupons_ac_esgotados");
+    }
+    if (!sameCycle) {
+      conn
+        .prepare(
+          `UPDATE subscriptions
+              SET cycle_start = datetime('now', 'start of month'),
+                  cupons_ac_used = 0
+            WHERE id = ?`,
+        )
+        .run(sub.id);
+    }
+    conn
+      .prepare("UPDATE subscriptions SET cupons_ac_used = cupons_ac_used + 1 WHERE id = ?")
+      .run(sub.id);
+  }
+
   const id = `b-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-  // descobrir point_id via connector
-  const pidRow = conn.prepare("SELECT point_id FROM connectors WHERE id = ?").get(data.connectorId) as { point_id: string } | undefined;
-  if (!pidRow) throw new Error(`connector_not_found:${data.connectorId}`);
   conn
     .prepare(
       `INSERT INTO bookings (id, user_id, connector_id, point_id, plan, start_hour, duration_min, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, 'confirmed')`
     )
-    .run(id, data.userId, data.connectorId, pidRow.point_id, data.plan, data.startHour, data.durationMin);
+    .run(id, data.userId, data.connectorId, connInfo.point_id, data.plan, data.startHour, data.durationMin);
 
   conn.prepare("UPDATE connectors SET status = 'reserved' WHERE id = ?").run(data.connectorId);
 
@@ -535,6 +597,10 @@ export type SubscriptionRow = {
   since: string;
   nextRenewal: string;
   paymentOk: boolean;
+  /** início do ciclo de cobrança atual (ISO). */
+  cycleStart: string | null;
+  /** quantos cupons de isenção R$20 em vagas AC foram consumidos no ciclo. */
+  cuponsACUsed: number;
 };
 
 function rowToSubscription(r: SubscriptionTableRow): SubscriptionRow {
@@ -547,6 +613,8 @@ function rowToSubscription(r: SubscriptionTableRow): SubscriptionRow {
     since: r.since,
     nextRenewal: r.next_renewal,
     paymentOk: !!r.payment_ok,
+    cycleStart: r.cycle_start ?? null,
+    cuponsACUsed: Number(r.cupons_ac_used ?? 0),
   };
 }
 
@@ -559,13 +627,16 @@ type SubscriptionTableRow = {
   since: string;
   next_renewal: string;
   payment_ok: number;
+  cycle_start: string | null;
+  cupons_ac_used: number;
 };
 
 export function getSubscriptionByUserId(userId: string): SubscriptionRow | null {
   const conn = db();
   const row = conn
     .prepare(
-      `SELECT id, user_id, plan, kwh_used, monthly_fee, since, next_renewal, payment_ok
+      `SELECT id, user_id, plan, kwh_used, monthly_fee, since, next_renewal, payment_ok,
+              cycle_start, cupons_ac_used
        FROM subscriptions WHERE user_id = ? ORDER BY id DESC LIMIT 1`,
     )
     .get(userId) as SubscriptionTableRow | undefined;

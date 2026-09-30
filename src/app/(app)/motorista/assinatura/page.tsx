@@ -16,7 +16,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 
-const brl = (n: number) => `R$ ${n.toFixed(2).replace(".", ",")}`;
+const brl = (n: number) => `R$ ${n.toFixed(2).replace(/\./, ',')}`;
 
 type SubscriptionDTO = {
   id: number;
@@ -26,6 +26,10 @@ type SubscriptionDTO = {
   since: string;
   nextRenewal: string;
   paymentOk: boolean;
+  cuponsACUsed: number;
+  cuponsACLimit: number;
+  tarifaEstacionamentoAC: number;
+  antecedenciaDias: number;
 };
 
 function PlanCard({
@@ -240,30 +244,72 @@ export default function AssinaturaPage() {
             </section>
 
             <section className="ev-card rounded-[6px] border border-black/10 p-5">
-              <div className="flex items-center gap-2">
-                <Wallet className="h-4 w-4 text-taken" />
-                <h2 className="text-[13px] font-semibold">Forma de pagamento</h2>
-              </div>
-              <div className="mt-3 flex items-center justify-between rounded-[6px] border border-black/10 bg-[#f7f8f6]/40 p-3">
-                <div>
-                  <p className="text-[13px] font-medium">Cartão de crédito •••• 4242</p>
-                  <p className="text-[11px] text-black/70">
-                    Cobrança automática recorrente
-                  </p>
-                </div>
-                <span
-                  className={cn(
-                    "rounded-[6px] border px-2 py-1 text-[10px] font-medium",
-                    sub.paymentOk
-                      ? "border-[#16a34a]/30 bg-[#16a34a]/10 text-[#16a34a]"
-                      : "border-busy/30 bg-busy/10 text-busy",
-                  )}
-                >
-                  {sub.paymentOk ? "Pago" : "Pendente"}
-                </span>
-              </div>
-            </section>
-          </div>
+                          <div className="flex items-center gap-2">
+                            <Wallet className="h-4 w-4 text-taken" />
+                            <h2 className="text-[13px] font-semibold">Forma de pagamento</h2>
+                          </div>
+                          <div className="mt-3 flex items-center justify-between rounded-[6px] border border-black/10 bg-[#f7f8f6]/40 p-3">
+                            <div>
+                              <p className="text-[13px] font-medium">Cartão de crédito •••• 4242</p>
+                              <p className="text-[11px] text-black/70">
+                                Cobrança automática recorrente
+                              </p>
+                            </div>
+                            <span
+                              className={cn(
+                                "rounded-[6px] border px-2 py-1 text-[10px] font-medium",
+                                sub.paymentOk
+                                  ? "border-[#16a34a]/30 bg-[#16a34a]/10 text-[#16a34a]"
+                                  : "border-busy/30 bg-busy/10 text-busy",
+                              )}
+                            >
+                              {sub.paymentOk ? "Pago" : "Pendente"}
+                            </span>
+                          </div>
+                        </section>
+
+                        {sub.cuponsACLimit > 0 && (
+                          <section className="ev-card rounded-[6px] border border-black/10 p-5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Zap className="h-4 w-4 text-ac" />
+                                <h2 className="text-[13px] font-semibold">
+                                  Cupons AC neste ciclo
+                                </h2>
+                              </div>
+                              <span className="rounded-[6px] border border-black/10 bg-[#f7f8f6]/60 px-2 py-1 font-mono text-[11px] tabular-nums">
+                                {sub.cuponsACUsed} / {sub.cuponsACLimit}
+                              </span>
+                            </div>
+                            <p className="mt-2 text-[11px] text-black/70">
+                              Cada reserva em vaga AC desconta 1 cupom de R$ {" "}
+                              {sub.tarifaEstacionamentoAC.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} da
+                              tarifa de estacionamento.
+                            </p>
+                            <div className="mt-3 flex items-center gap-1.5">
+                              {Array.from({ length: sub.cuponsACLimit }).map((_, i) => {
+                                const used = i < sub.cuponsACUsed;
+                                return (
+                                  <span
+                                    key={i}
+                                    className={cn(
+                                      "h-2 flex-1 rounded-[6px]",
+                                      used ? "bg-ac" : "bg-black/10",
+                                    )}
+                                  />
+                                );
+                              })}
+                            </div>
+                            <p className="mt-3 text-[11px] text-black/70">
+                              Antecedência máxima de reserva: {' '}
+                              <span className="text-black">
+                                {sub.antecedenciaDias} dias
+                              </span>
+                              .
+                            </p>
+                          </section>
+                        )}
+                      </div>
 
           <div className="flex flex-col gap-4">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -277,8 +323,8 @@ export default function AssinaturaPage() {
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-busy" />
                 <div className="text-[12px]">
                   <p className="font-medium text-black">
-                    Você está no {sub.planId === "noturno" ? "Noturno Garantido" : "Pro Driver"}
-                  </p>
+                                      Você está no {sub.planId === "noturno" ? "Noturno Garantido" : "Pro Plus 150"}
+                                    </p>
                   <p className="mt-1 text-black/80">
                     Excedente a{" "}
                     <span className="text-black">{brl(current.overageRate)}/kWh</span>{" "}

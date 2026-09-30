@@ -165,6 +165,12 @@ export type Plan = {
   connectorKind: ChargerKind;
   window: string;
   accent: string;
+  /** quantos cupons isentos (R$ 20 cada) o plano libera por mês em vagas AC */
+  cuponsAC?: number;
+  /** valor de cada cupom de isenção em reais (exibição/regra de negócio) */
+  tarifaEstacionamentoAC?: number;
+  /** quantos dias de antecedência o plano permite pra reservar */
+  antecedenciaDias?: number;
 };
 
 export const PLANS: Plan[] = [
@@ -188,25 +194,29 @@ export const PLANS: Plan[] = [
     accent: "text-ac",
   },
   {
-    id: "pro",
-    name: "Pro Driver",
-    tagline: "Recarga rápida sem fila, na janela da sua jornada",
-    audience: "Motoristas de app (Uber / 99)",
-    monthlyFee: 390,
-    includedKwh: 300,
-    includedKwhRate: 1.79,
-    overageRate: 2.49,
-    perks: [
-      "Janelas diurnas agendadas de 30 a 60 min",
-      "300 kWh inclusos por mês",
-      "Excedente a R$ 2,49/kWh",
-      "Sem taxa de no-show em reservas confirmadas",
-    ],
-    connectorKind: "DC",
-    window: "06h — 20h",
-    accent: "text-dc",
-  },
-];
+      id: "pro",
+      name: "Pro Plus 150",
+      tagline: "Recarga rápida sem fila, na janela da sua jornada",
+      audience: "Motoristas de app (Uber / 99)",
+      monthlyFee: 375,
+      includedKwh: 150,
+      includedKwhRate: 1.79,
+      overageRate: 2.49,
+      perks: [
+        "Janelas diurnas agendadas de 30 a 60 min",
+        "150 kWh inclusos por mês",
+        "6 cupons de R$ 20 grátis por mês em vagas AC (isenção da tarifa de estacionamento)",
+        "Reserva com até 7 dias de antecedência",
+        "Excedente a R$ 2,49/kWh",
+      ],
+      connectorKind: "DC",
+      window: "06h — 20h",
+      accent: "text-dc",
+      cuponsAC: 6,
+      tarifaEstacionamentoAC: 20,
+      antecedenciaDias: 7,
+    },
+  ];
 
 export const PLAN_BY_ID = Object.fromEntries(PLANS.map((p) => [p.id, p])) as Record<PlanId, Plan>;
 

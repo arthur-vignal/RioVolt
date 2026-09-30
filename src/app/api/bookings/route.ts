@@ -36,12 +36,50 @@ export async function POST(request: NextRequest) {
   if (!pointId || !connectorId || !Number.isFinite(start) || !Number.isFinite(durationMin)) {
     return NextResponse.json({ error: "Campos obrigatórios ausentes" }, { status: 400 });
   }
-  const booking = await createBooking({
-    userId,
-    connectorId,
-    plan: planId as "noturno" | "pro",
-    startHour: start,
-    durationMin,
-  });
-  return NextResponse.json({ booking });
-}
+  let booking;
+    try {
+      booking = await createBooking({
+        userId,
+        connectorId,
+        plan: planId as "noturno" | "pro",
+        startHour: start,
+        durationMin,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === "cupons_ac_esgotados") {
+        return NextResponse.json(
+          {
+            error:
+              "Você atingiu os 6 cupons de R$20 grátis em vagas AC deste ciclo. Próxima reserva AC será tarifada.",
+            code: "CUPONS_AC_ESGOTADOS",
+          },
+          { status: 402 },
+        );
+      }
+      if (msg === "cupons_no_subscription") {
+        return NextResponse.json(
+          {
+            error: "Você precisa de uma assinatura Pro Plus 150 ativa.",
+            code: "NO_SUBSCRIPTION",
+          },
+          { status: 402 },
+        );
+      }
+      if (msg.startsWith("connector_busy:")) {
+        return NextResponse.json(
+          { error: "Esse conector já está reservado nesse horário." },
+          { status: 409 },
+        );
+      }
+      if (msg.startsWith("connector_not_found:")) {
+        return NextResponse.json(
+          { error: "Conector não encontrado." },
+          { status: 404 },
+        );
+      }
+      // Re-throw pro handler global de erro do Next registrar (mantém 500 com stack).
+      throw err;
+    }
+    return NextResponse.json({ booking });
+  }

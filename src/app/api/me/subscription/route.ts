@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { getSubscriberById } from "@/lib/auth-db";
 import { decodeSession, SESSION_COOKIE_NAME } from "@/lib/session";
 import { getSubscriptionByUserId } from "@/lib/db";
+import { PLAN_BY_ID, type PlanId } from "@/lib/mock-data";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,26 @@ export async function GET() {
     return Response.json({ ok: false, subscription: null }, { status: 200 });
   }
 
-  const subscription = await getSubscriptionByUserId(user.id);
-  return Response.json({ ok: true, subscription });
+  const sub = await getSubscriptionByUserId(user.id);
+  if (!sub) {
+    return Response.json({ ok: true, subscription: null });
+  }
+  const plan = PLAN_BY_ID[((sub as { planId?: PlanId }).planId ?? (sub as { plan?: PlanId }).plan ?? "noturno") as PlanId];
+  const cuponsACUsed = Number((sub as { cuponsACUsed?: number }).cuponsACUsed ?? 0);
+  return Response.json({
+    ok: true,
+    subscription: {
+      id: sub.id,
+      planId: (sub as { planId?: PlanId }).planId ?? ((sub as { plan?: PlanId }).plan ?? "noturno"),
+      kwhUsed: sub.kwhUsed,
+      monthlyFee: sub.monthlyFee,
+      since: sub.since,
+      nextRenewal: sub.nextRenewal,
+      paymentOk: sub.paymentOk,
+      cuponsACUsed,
+      cuponsACLimit: plan.cuponsAC ?? 0,
+      tarifaEstacionamentoAC: plan.tarifaEstacionamentoAC ?? 0,
+      antecedenciaDias: plan.antecedenciaDias ?? 1,
+    },
+  });
 }
