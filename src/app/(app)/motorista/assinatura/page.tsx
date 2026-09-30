@@ -35,7 +35,7 @@ function PlanCard({
     <div
       className={cn(
         "ev-card flex flex-col rounded-[6px] border p-5",
-        isCurrent ? "#16a34a/40" : "border-black/10",
+        isCurrent ? "border-[#16a34a]/40" : "border-black/10",
       )}
     >
       <div className="flex items-start justify-between gap-3">
@@ -50,23 +50,23 @@ function PlanCard({
           </span>
           <div>
             <h3 className="text-[15px] font-semibold leading-tight">{p.name}</h3>
-            <p className="text-[11px] #000000/70">{p.audience}</p>
+            <p className="text-[11px] text-black/70">{p.audience}</p>
           </div>
         </div>
         {isCurrent && (
-          <span className="rounded-[6px] border #16a34a/30 #16a34a/10 px-2.5 py-1 text-[10px] font-medium #16a34a">
+          <span className="rounded-[6px] border border-[#16a34a]/30 bg-[#16a34a]/10 px-2.5 py-1 text-[10px] font-medium #16a34a">
             Seu plano
           </span>
         )}
       </div>
 
-      <p className="mt-3 text-[12px] #000000/80">{p.tagline}</p>
+      <p className="mt-3 text-[12px] text-black/80">{p.tagline}</p>
 
       <div className="mt-4 flex items-baseline gap-1.5">
         <span className="text-3xl font-semibold tabular-nums tracking-tight">
           {brl(p.monthlyFee)}
         </span>
-        <span className="text-[12px] #000000/60">/mês</span>
+        <span className="text-[12px] text-black/60">/mês</span>
       </div>
 
       <div className="mt-3 space-y-1.5 rounded-[6px] border border-black/10 #f7f8f6/40 p-3 text-[12px]">
@@ -92,7 +92,7 @@ function PlanCard({
 
       <ul className="mt-4 space-y-2">
         {p.perks.map((perk) => (
-          <li key={perk} className="flex items-start gap-2 text-[12px] #000000/85">
+          <li key={perk} className="flex items-start gap-2 text-[12px] text-black/85">
             <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 #16a34a" />
             {perk}
           </li>
@@ -106,8 +106,8 @@ function PlanCard({
         className={cn(
           "mt-5 inline-flex h-9 w-full items-center justify-center gap-2 rounded-[6px] text-[13px] font-medium transition-colors",
           isCurrent
-            ? "cursor-default border border-black/10 #000000/60"
-            : "border #16a34a/30 #16a34a/10 #16a34a hover:#16a34a/15",
+            ? "cursor-default border border-black/10 text-black/60"
+            : "border border-[#16a34a]/30 bg-[#16a34a]/10 #16a34a hover:bg-[#16a34a]/15",
         )}
       >
         {isCurrent ? "Plano atual" : "Mudar para este plano"}
@@ -129,11 +129,11 @@ export default function AssinaturaPage() {
     <Shell scope="motorista">
       <div className="mx-auto max-w-[1200px]">
         <div className="mb-6">
-          <p className="text-[11px] font-medium uppercase tracking-[0.18em] #000000/70">
+          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-black/70">
             Minha conta
           </p>
           <h1 className="mt-1.5 text-2xl font-semibold tracking-tight">Assinatura</h1>
-          <p className="mt-1 text-[13px] #000000/70">
+          <p className="mt-1 text-[13px] text-black/70">
             Plano {current.name} desde {ME.since} · próxima cobrança em {ME.nextRenewal}
           </p>
         </div>
@@ -143,12 +143,12 @@ export default function AssinaturaPage() {
             <section className="ev-card rounded-[6px] border border-black/10 p-5">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-[11px] font-medium uppercase tracking-[0.18em] #000000/70">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-black/70">
                     Consumo do ciclo
                   </p>
                   <div className="mt-1.5 flex items-baseline gap-2">
                     <span className="text-3xl font-semibold tabular-nums">{kwh}</span>
-                    <span className="text-[13px] #000000/70">
+                    <span className="text-[13px] text-black/70">
                       / {current.includedKwh} kWh
                     </span>
                   </div>
@@ -158,7 +158,7 @@ export default function AssinaturaPage() {
                     "rounded-[6px] border px-2.5 py-1 text-[11px] font-medium",
                     over > 0
                       ? "border-busy/30 bg-busy/10 text-busy"
-                      : "#16a34a/30 #16a34a/10 #16a34a",
+                      : "border-[#16a34a]/30 bg-[#16a34a]/10 text-[#16a34a]",
                   )}
                 >
                   {over > 0 ? `${over} kWh excedente` : "Dentro da franquia"}
@@ -166,7 +166,7 @@ export default function AssinaturaPage() {
               </div>
 
               <Progress value={pct} className="mt-4 h-2" />
-              <p className="mt-2 text-[11px] #000000/60">
+              <p className="mt-2 text-[11px] text-black/60">
                 {pct}% da franquia consumida · slider pra simular o fechamento do mês
               </p>
 
@@ -209,15 +209,15 @@ export default function AssinaturaPage() {
               <div className="mt-3 flex items-center justify-between rounded-[6px] border border-black/10 #f7f8f6/40 p-3">
                 <div>
                   <p className="text-[13px] font-medium">Cartão de crédito •••• 4242</p>
-                  <p className="text-[11px] #000000/70">
+                  <p className="text-[11px] text-black/70">
                     Cobrança automática recorrente
                   </p>
                 </div>
-                <span className="rounded-[6px] border #16a34a/30 #16a34a/10 px-2 py-1 text-[10px] font-medium #16a34a">
+                <span className="rounded-[6px] border border-[#16a34a]/30 bg-[#16a34a]/10 px-2 py-1 text-[10px] font-medium #16a34a">
                   Pago
                 </span>
               </div>
-              <p className="mt-2.5 text-[11px] #000000/60">
+              <p className="mt-2.5 text-[11px] text-black/60">
                 Gateway recorrente: Pix recorrente também disponível (R$ 0,99 a R$ 1,99 por
                 transação, contra 2,8% a 3,9% no cartão).
               </p>
@@ -235,14 +235,14 @@ export default function AssinaturaPage() {
               <div className="flex items-start gap-2.5">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-busy" />
                 <div className="text-[12px]">
-                  <p className="font-medium #000000">
+                  <p className="font-medium text-black">
                     Você está no {plan === "noturno" ? "Noturno Garantido" : "Pro Driver"}
                   </p>
-                  <p className="mt-1 #000000/80">
+                  <p className="mt-1 text-black/80">
                     {plan === "noturno" ? (
                       <>
                         O excedente do seu plano sai a{" "}
-                        <span className="#000000">{brl(current.overageRate)}/kWh</span> —
+                        <span className="text-black">{brl(current.overageRate)}/kWh</span> —
                         {" "}
                         {saved > 0
                           ? `você economiza ${brl(saved)} em relação ao plano Pro Driver no mesmo consumo.`
@@ -251,7 +251,7 @@ export default function AssinaturaPage() {
                     ) : (
                       <>
                         No Pro Driver o excedente sai a{" "}
-                        <span className="#000000">{brl(current.overageRate)}/kWh</span>, com
+                        <span className="text-black">{brl(current.overageRate)}/kWh</span>, com
                         janela diurna e carregadores DC. Se carregar de madrugada perto de casa, o
                         Noturno Garantido sai mais barato.
                       </>
@@ -263,7 +263,7 @@ export default function AssinaturaPage() {
 
             <Link
               href="/motorista/reservar"
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-[6px] border #16a34a/30 #16a34a/10 text-[13px] font-medium #16a34a transition-colors hover:#16a34a/15"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-[6px] border border-[#16a34a]/30 bg-[#16a34a]/10 text-[13px] font-medium #16a34a transition-colors hover:bg-[#16a34a]/15"
             >
               <TrendingUp className="h-4 w-4" />
               Reservar vaga com este plano

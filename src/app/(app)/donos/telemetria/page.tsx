@@ -33,7 +33,7 @@ const CustomTooltip = ({
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-[6px] border border-black/10 bg-popover px-3 py-2 shadow-xl">
-      <p className="text-[11px] font-medium #000000/70">Dia {label}</p>
+      <p className="text-[11px] font-medium text-black/70">Dia {label}</p>
       <div className="mt-1.5 space-y-1">
         {payload.map((p) => (
           <div key={p.name} className="flex items-center gap-2 text-[12px]">
@@ -63,8 +63,8 @@ export default function TelemetriaPage() {
     const pro = SUBSCRIBERS.filter((s) => s.planId === "pro");
     const sum = (arr: typeof SUBSCRIBERS) => arr.reduce((a, s) => a + s.kwh30d, 0);
     return [
-      { name: "Noturno (AC)", kwh: sum(noturno), users: noturno.length, color: "#000000" },
-      { name: "Pro Driver (DC)", kwh: sum(pro), users: pro.length, color: "#16a34a" },
+      { name: "Noturno (AC)", kwh: sum(noturno), users: noturno.length, color: "text-black" },
+      { name: "Pro Driver (DC)", kwh: sum(pro), users: pro.length, color: "text-[#16a34a]" },
     ];
   }, []);
 
@@ -74,11 +74,11 @@ export default function TelemetriaPage() {
     <Shell scope="donos">
       <div className="mx-auto max-w-[1400px]">
         <div className="mb-5">
-          <p className="text-[11px] font-medium uppercase tracking-[0.18em] #000000/70">
+          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-black/70">
             Sistema de donos
           </p>
           <h1 className="mt-1.5 text-2xl font-semibold tracking-tight">Telemetria de consumo</h1>
-          <p className="mt-1 text-[13px] #000000/70">
+          <p className="mt-1 text-[13px] text-black/70">
             kWh consumido versus valor pago no plano · últimos 30 dias
           </p>
         </div>
@@ -90,8 +90,8 @@ export default function TelemetriaPage() {
               value: `${totalKwh.toLocaleString("pt-BR")} kWh`,
               sub: `média de ${avgKwh} kWh/dia`,
               icon: BatteryCharging,
-              tone: "#16a34a",
-              ring: "#16a34a/25 #16a34a/10",
+              tone: "text-[#16a34a]",
+              ring: "ring-[#16a34a]/25 bg-[#16a34a]/10",
             },
             {
               label: "Receita bruta",
@@ -122,7 +122,7 @@ export default function TelemetriaPage() {
             return (
               <div key={k.label} className="ev-card rounded-[6px] border border-black/10 p-4">
                 <div className="flex items-start justify-between">
-                  <p className="text-[11px] uppercase tracking-[0.16em] #000000/70">
+                  <p className="text-[11px] uppercase tracking-[0.16em] text-black/70">
                     {k.label}
                   </p>
                   <span
@@ -136,7 +136,7 @@ export default function TelemetriaPage() {
                   </span>
                 </div>
                 <p className="mt-2 text-2xl font-semibold tabular-nums">{k.value}</p>
-                <p className="mt-0.5 text-[11px] #000000/60">{k.sub}</p>
+                <p className="mt-0.5 text-[11px] text-black/60">{k.sub}</p>
               </div>
             );
           })}
@@ -147,7 +147,7 @@ export default function TelemetriaPage() {
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h2 className="text-[13px] font-semibold">Energia e receita por dia</h2>
-                <p className="mt-0.5 text-[11px] #000000/60">
+                <p className="mt-0.5 text-[11px] text-black/60">
                   barras = kWh · linha = receita bruta
                 </p>
               </div>
@@ -157,8 +157,8 @@ export default function TelemetriaPage() {
                 <ComposedChart data={data} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
                   <defs>
                     <linearGradient id="kwhFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#16a34a" stopOpacity={0.45} />
-                      <stop offset="100%" stopColor="#16a34a" stopOpacity={0.05} />
+                      <stop offset="0%" stopColor="text-[#16a34a]" stopOpacity={0.45} />
+                      <stop offset="100%" stopColor="text-[#16a34a]" stopOpacity={0.05} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid stroke="#1f2733" vertical={false} />
@@ -195,7 +195,7 @@ export default function TelemetriaPage() {
                     dataKey="kwh"
                     name="kWh"
                     fill="url(#kwhFill)"
-                    stroke="#16a34a"
+                    stroke="text-[#16a34a]"
                     strokeWidth={1.2}
                     radius={[3, 3, 0, 0]}
                     maxBarSize={22}
@@ -205,7 +205,7 @@ export default function TelemetriaPage() {
                     type="monotone"
                     dataKey="revenue"
                     name="Receita (R$)"
-                    stroke="#000000"
+                    stroke="text-black"
                     strokeWidth={2}
                     dot={false}
                     activeDot={{ r: 3 }}
@@ -218,7 +218,7 @@ export default function TelemetriaPage() {
           <div className="flex flex-col gap-5">
             <section className="ev-card rounded-[6px] border border-black/10 p-5">
               <h2 className="text-[13px] font-semibold">Consumo por plano</h2>
-              <p className="mt-0.5 text-[11px] #000000/60">
+              <p className="mt-0.5 text-[11px] text-black/60">
                 kWh nos últimos 30 dias por tipo de assinante
               </p>
 
@@ -229,7 +229,7 @@ export default function TelemetriaPage() {
                     <div key={b.name}>
                       <div className="flex items-baseline justify-between text-[12px]">
                         <span className="#000000/90">{b.name}</span>
-                        <span className="tabular-nums #000000/70">
+                        <span className="tabular-nums text-black/70">
                           {b.kwh} kWh
                         </span>
                       </div>
@@ -239,7 +239,7 @@ export default function TelemetriaPage() {
                           style={{ width: `${pct}%`, background: b.color }}
                         />
                       </div>
-                      <p className="mt-1 text-[11px] #000000/55">
+                      <p className="mt-1 text-[11px] text-black/55">
                         {b.users} assinantes · média{" "}
                         {Math.round(b.kwh / Math.max(1, b.users))} kWh
                       </p>
@@ -273,7 +273,7 @@ export default function TelemetriaPage() {
                   </span>
                 </div>
               </div>
-              <p className="mt-3 text-[11px] #000000/55">
+              <p className="mt-3 text-[11px] text-black/55">
                 Gargalo declarado no trabalho: aumento de carga na subestação da Light para os
                 pontos DC e ocupação indevida de vaga.
               </p>

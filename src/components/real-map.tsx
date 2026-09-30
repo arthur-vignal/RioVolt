@@ -10,7 +10,6 @@ export function RealMap({ points }: { points: Point[] }) {
 
   useEffect(() => {
     if (!ref.current || mapRef.current) return;
-
     let cancelled = false;
 
     (async () => {
@@ -26,9 +25,12 @@ export function RealMap({ points }: { points: Point[] }) {
           attributionControl: true,
           scrollWheelZoom: true,
         });
+
         L.control.zoom({ position: "bottomright" }).addTo(map);
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          attribution: "&copy; OpenStreetMap",
+
+        L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+          attribution: "&copy; OpenStreetMap &copy; CARTO",
+          maxZoom: 19,
         }).addTo(map);
 
         points.forEach((p) => {
@@ -39,12 +41,13 @@ export function RealMap({ points }: { points: Point[] }) {
             p.connectors.find((c) => c.status === "free");
           const color =
             worst?.status === "free"
-              ? "#16a34a"
+              ? "text-[#16a34a]"
               : worst?.status === "offline"
-                ? "#737373"
-                : "#000000";
+                ? "#9ca3af"
+                : "#111111";
+
           L.circleMarker([p.lat, p.lon], {
-            radius: 8,
+            radius: 9,
             color,
             weight: 2,
             opacity: 1,
@@ -67,7 +70,7 @@ export function RealMap({ points }: { points: Point[] }) {
         mapRef.current = map;
         setReady(true);
       } catch {
-        // ignore Leaflet double-init in dev/strict mode
+        // ignore double-init in Strict Mode
       }
     })();
 
@@ -83,10 +86,10 @@ export function RealMap({ points }: { points: Point[] }) {
   }, [points]);
 
   return (
-    <div className="relative h-[420px] w-full overflow-hidden border border-black/10 bg-white rounded-[6px]">
+    <div className="relative h-[420px] w-full overflow-hidden rounded-[6px] border border-black/10 bg-[#f8f9fa]">
       <div ref={ref} className="absolute inset-0" />
       {!ready ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-white text-[13px] text-black/60">
+        <div className="absolute inset-0 flex items-center justify-center bg-[#f8f9fa] text-[13px] text-black/55">
           Carregando mapa...
         </div>
       ) : null}

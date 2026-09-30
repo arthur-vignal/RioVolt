@@ -41,10 +41,10 @@ function slotState(point: Point, plan: PlanId, hour: number): SlotState {
 }
 
 const SLOT_STYLE: Record<SlotState, { cell: string; label: string }> = {
-  free: { cell: "#16a34a/30 #16a34a/10 #16a34a", label: "Livre" },
+  free: { cell: "border-[#16a34a]/30 bg-[#16a34a]/10 text-[#16a34a]", label: "Livre" },
   tight: { cell: "border-busy/30 bg-busy/10 text-busy", label: "Última vaga" },
-  full: { cell: "border-black/10 #f2f3f2/40 #000000/50", label: "Ocupado" },
-  offline: { cell: "border-dashed border-black/10 bg-transparent #000000/35", label: "Fora da janela" },
+  full: { cell: "border-black/10 #f2f3f2/40 text-black/50", label: "Ocupado" },
+  offline: { cell: "border-dashed border-black/10 bg-transparent text-black/35", label: "Fora da janela" },
 };
 
 function PointRow({
@@ -63,7 +63,7 @@ function PointRow({
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="truncate text-[15px] font-semibold">{point.name}</h3>
-          <p className="mt-0.5 text-[12px] #000000/70">{point.neighborhood}</p>
+          <p className="mt-0.5 text-[12px] text-black/70">{point.neighborhood}</p>
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
           {point.connectors.map((c) => (
@@ -122,11 +122,11 @@ function VagasContent() {
   return (
     <div className="mx-auto max-w-[1400px]">
       <div className="mb-6">
-        <p className="text-[11px] font-medium uppercase tracking-[0.18em] #000000/70">
+        <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-black/70">
           Disponibilidade
         </p>
         <h1 className="mt-1.5 text-2xl font-semibold tracking-tight">Ver vaga pra carregar</h1>
-        <p className="mt-1 text-[13px] #000000/70">
+        <p className="mt-1 text-[13px] text-black/70">
           Janelas do plano {current.name} · {PLAN_WINDOW_LABEL[plan]} · buffer de {BUFFER_MIN} min entre reservas
         </p>
       </div>
@@ -142,7 +142,7 @@ function VagasContent() {
               onClick={() => setPlan(id)}
               className={cn(
                 "ev-card rounded-[6px] border p-4 text-left transition-colors",
-                on ? "#16a34a/40" : "border-black/10 hover:border-foreground/20",
+                on ? "border-[#16a34a]/40" : "border-black/10 hover:border-black/20",
               )}
             >
               <div className="flex items-center justify-between gap-2">
@@ -157,8 +157,8 @@ function VagasContent() {
                 </div>
                 {on && <span className="text-[10px] uppercase tracking-[0.14em] #16a34a">Ativo</span>}
               </div>
-              <p className="mt-1 text-[12px] #000000/70">{p.tagline}</p>
-              <p className="mt-2 font-mono text-[12px] #000000/80">
+              <p className="mt-1 text-[12px] text-black/70">{p.tagline}</p>
+              <p className="mt-2 font-mono text-[12px] text-black/80">
                 Janela {PLAN_WINDOW_LABEL[id]} · {p.connectorKind} {id === "noturno" ? "7–22 kW" : "30–60 kW"}
               </p>
             </button>
@@ -173,8 +173,8 @@ function VagasContent() {
           className={cn(
             "h-8 rounded-[6px] border px-3 text-[12px] font-medium transition-colors",
             pointId === null
-              ? "border-foreground/25 bg-foreground/[0.08] #000000"
-              : "border-black/10 #000000 hover:#000000",
+              ? "border-black/20 text-black/[0.08] text-black"
+              : "border-black/10 text-black hover:text-black",
           )}
         >
           Todos os pontos
@@ -187,14 +187,14 @@ function VagasContent() {
             className={cn(
               "h-8 rounded-[6px] border px-3 text-[12px] font-medium transition-colors",
               pointId === p.id
-                ? "border-foreground/25 bg-foreground/[0.08] #000000"
-                : "border-black/10 #000000 hover:#000000",
+                ? "border-black/20 text-black/[0.08] text-black"
+                : "border-black/10 text-black hover:text-black",
             )}
           >
             {p.neighborhood}
           </button>
         ))}
-        <span className="ml-auto font-mono text-[12px] #000000/70">
+        <span className="ml-auto font-mono text-[12px] text-black/70">
           horário: {String(hour).padStart(2, "0")}h
         </span>
       </div>
@@ -206,16 +206,16 @@ function VagasContent() {
       </div>
 
       <div className="mt-5 flex flex-col gap-3 rounded-[6px] border border-black/10 #ffffff/50 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-2.5 text-[12px] #000000/80">
+        <div className="flex items-start gap-2.5 text-[12px] text-black/80">
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-taken" />
           <p>
-            Você tem <span className="font-medium #000000">15 min de tolerância</span> depois do horário
+            Você tem <span className="font-medium text-black">15 min de tolerância</span> depois do horário
             reservado. Passou disso sem iniciar a carga, a vaga volta pra rede e pode gerar taxa de no-show.
           </p>
         </div>
         <Link
           href={pointId ? `/motorista/reservar?ponto=${pointId}&hora=${hour}` : "/motorista/reservar"}
-          className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-[6px] border #16a34a/30 #16a34a/10 px-4 text-[13px] font-medium #16a34a transition-colors hover:#16a34a/15"
+          className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-[6px] border border-[#16a34a]/30 bg-[#16a34a]/10 px-4 text-[13px] font-medium #16a34a transition-colors hover:bg-[#16a34a]/15"
         >
           <BatteryCharging className="h-4 w-4" />
           Reservar neste horário
@@ -229,7 +229,7 @@ function VagasContent() {
 export default function VagasPage() {
   return (
     <Shell scope="motorista">
-      <Suspense fallback={<div className="text-sm #000000">Carregando…</div>}>
+      <Suspense fallback={<div className="text-sm text-black">Carregando…</div>}>
         <VagasContent />
       </Suspense>
     </Shell>

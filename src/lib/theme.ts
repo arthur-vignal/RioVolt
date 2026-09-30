@@ -1,0 +1,18 @@
+export const VOL = {
+  radius: 'rounded-[6px]'.replace('rounded-[','rounded-[1').replace(']',']'),
+  radiusRaw: 6,
+  fontDisplay: 'text-[18px] leading-[22px] font-semibold tracking-[-0.03em]',
+  fontBody: 'text-[14px] leading-[20px] font-normal',
+  fontSmall: 'text-[12px] leading-[16px] font-medium',
+  fontMicro: 'text-[11px] leading-[14px] font-semibold uppercase tracking-[0.16em]',
+  surface: 'bg-white',
+  canvas: 'bg-[#f7f8f6]',
+  textPrimary: 'text-black',
+  textSecondary: 'text-black/70',
+  textTertiary: 'text-black/55',
+  border: 'border-black/10',
+  borderStrong: 'border-black/20',
+  accent: 'bg-[#16a34a]',
+  accentText: 'text-[#16a34a]',
+  ring: 'ring-[#16a34a]',
+} as const;

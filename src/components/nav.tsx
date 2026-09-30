@@ -11,6 +11,7 @@ import {
   LayoutGrid,
   Users,
   Gauge,
+  LogOut,
 } from "lucide-react";
 
 export type Scope = "motorista" | "donos";
@@ -32,7 +33,7 @@ export const NAV: NavItem[] = [
   { href: "/donos/telemetria", label: "Telemetria", icon: Gauge, scope: "donos" },
 ];
 
-export function VoltrioMark({ subtitle }: { subtitle?: string }) {
+export function VoltrioMark() {
   return (
     <div className="flex items-center gap-2.5">
       <div className="flex h-8 w-8 items-center justify-center rounded-[6px] bg-[#16a34a] text-white">
@@ -40,7 +41,6 @@ export function VoltrioMark({ subtitle }: { subtitle?: string }) {
       </div>
       <div className="leading-none">
         <div className="text-[16px] font-semibold tracking-[-0.03em] text-black">Voltrio</div>
-        {subtitle ? <div className="mt-1 text-[11px] font-medium text-black/55">{subtitle}</div> : null}
       </div>
     </div>
   );
@@ -49,12 +49,12 @@ export function VoltrioMark({ subtitle }: { subtitle?: string }) {
 export function Brand({ scope }: { scope: Scope }) {
   return (
     <Link href="/" className="flex items-center gap-2.5" aria-label="Voltrio, página inicial">
-      <VoltrioMark subtitle={scope === "donos" ? "Painel dos donos" : "App do motorista"} />
+      <VoltrioMark />
     </Link>
   );
 }
 
-export function SideNav({ scope }: { scope: Scope }) {
+export function SideNav({ scope, onLogout }: { scope: Scope; onLogout?: () => void }) {
   const pathname = usePathname();
   const items = NAV.filter((n) => n.scope === scope);
   return (
@@ -77,6 +77,17 @@ export function SideNav({ scope }: { scope: Scope }) {
           </Link>
         );
       })}
+
+      {onLogout ? (
+        <button
+          type="button"
+          onClick={onLogout}
+          className="mt-3 flex min-h-10 items-center gap-3 rounded-[6px] px-3 py-2 text-[14px] font-medium text-black/55 hover:bg-black/5 hover:text-black"
+        >
+          <LogOut className="h-4 w-4" aria-hidden="true" />
+          Sair
+        </button>
+      ) : null}
     </nav>
   );
 }

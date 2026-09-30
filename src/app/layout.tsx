@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fira_Code, Fira_Sans } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "@/lib/providers";
 
 const firaSans = Fira_Sans({
   variable: "--font-fira-sans",
@@ -21,11 +22,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
-      lang="pt-BR"
-      className={`${firaSans.variable} ${firaCode.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="pt-BR" className={`${firaSans.variable} ${firaCode.variable} h-full antialiased`}>
+      <body className="min-h-full flex flex-col bg-[#f7f8f6] text-black">
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   );
 }

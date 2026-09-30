@@ -16,8 +16,8 @@ const STATUS_CELL: Record<
   { bar: string; chip: string; label: string }
 > = {
   confirmed: {
-    bar: "#16a34a/22 #16a34a/45",
-    chip: "#16a34a/15 #16a34a #16a34a/30",
+    bar: "bg-[#16a34a]/22 border-[#16a34a]/45",
+    chip: "bg-[#16a34a]/15 text-[#16a34a] border-[#16a34a]/30",
     label: "Confirmado",
   },
   pending: {
@@ -27,7 +27,7 @@ const STATUS_CELL: Record<
   },
   cancelled: {
     bar: "#f2f3f2/30 border-black/10",
-    chip: "#f2f3f2 #000000/70 border-black/10",
+    chip: "#f2f3f2 text-black/70 border-black/10",
     label: "Cancelado",
   },
   no_show: {
@@ -73,11 +73,11 @@ export default function AgendamentosPage() {
       <div className="mx-auto max-w-[1500px]">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-[11px] font-medium uppercase tracking-[0.18em] #000000/70">
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-black/70">
               Sistema de donos
             </p>
             <h1 className="mt-1.5 text-2xl font-semibold tracking-tight">Grade de agendamentos</h1>
-            <p className="mt-1 flex items-center gap-1.5 text-[13px] capitalize #000000/70">
+            <p className="mt-1 flex items-center gap-1.5 text-[13px] capitalize text-black/70">
               <CalendarDays className="h-3.5 w-3.5" />
               {dateLabel} · {bookings.length} reservas
             </p>
@@ -90,7 +90,7 @@ export default function AgendamentosPage() {
                 onClick={() => setPointId("all")}
                 className={cn(
                   "rounded-[6px] px-2.5 py-1 text-[12px] font-medium transition-colors",
-                  pointId === "all" ? "bg-foreground text-background" : "#000000",
+                  pointId === "all" ? "#000000 text-background" : "text-black",
                 )}
               >
                 Todos
@@ -102,7 +102,7 @@ export default function AgendamentosPage() {
                   onClick={() => setPointId(p.id)}
                   className={cn(
                     "rounded-[6px] px-2.5 py-1 text-[12px] font-medium transition-colors",
-                    pointId === p.id ? "bg-foreground text-background" : "#000000",
+                    pointId === p.id ? "#000000 text-background" : "text-black",
                   )}
                 >
                   {p.neighborhood}
@@ -113,7 +113,7 @@ export default function AgendamentosPage() {
               <button
                 type="button"
                 aria-label="Dia anterior"
-                className="flex h-8 w-8 items-center justify-center #000000 transition-colors hover:#000000"
+                className="flex h-8 w-8 items-center justify-center text-black transition-colors hover:text-black"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
@@ -121,7 +121,7 @@ export default function AgendamentosPage() {
               <button
                 type="button"
                 aria-label="Próximo dia"
-                className="flex h-8 w-8 items-center justify-center #000000 transition-colors hover:#000000"
+                className="flex h-8 w-8 items-center justify-center text-black transition-colors hover:text-black"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
@@ -149,7 +149,7 @@ export default function AgendamentosPage() {
                 className="grid border-b border-black/10"
                 style={{ gridTemplateColumns: `72px repeat(${connectors.length}, minmax(0,1fr))` }}
               >
-                <div className="px-3 py-2.5 text-[10px] uppercase tracking-[0.16em] #000000/60">
+                <div className="px-3 py-2.5 text-[10px] uppercase tracking-[0.16em] text-black/60">
                   Hora
                 </div>
                 {connectors.map((c) => {
@@ -159,7 +159,7 @@ export default function AgendamentosPage() {
                       <p className="truncate text-[12px] font-medium">{p.neighborhood}</p>
                       <p className="mt-1 flex items-center gap-1.5">
                         <KindBadge kind={c.kind} powerKw={c.powerKw} />
-                        <span className="font-mono text-[10px] #000000/60">
+                        <span className="font-mono text-[10px] text-black/60">
                           {c.id}
                         </span>
                       </p>
@@ -184,7 +184,7 @@ export default function AgendamentosPage() {
                       className="absolute left-0 w-full px-3"
                       style={{ top: i * H_PX }}
                     >
-                      <span className="font-mono text-[10px] #000000/50">
+                      <span className="font-mono text-[10px] text-black/50">
                         {String(h).padStart(2, "0")}h
                       </span>
                     </div>
@@ -221,11 +221,11 @@ export default function AgendamentosPage() {
                             )}
                             style={{ top: Math.max(0, top), height }}
                           >
-                            <p className="truncate text-[11px] font-medium #000000">
+                            <p className="truncate text-[11px] font-medium text-black">
                               {b.user}
                             </p>
                             {height > 34 && (
-                              <p className="mt-0.5 flex items-center gap-1 text-[10px] #000000/80">
+                              <p className="mt-0.5 flex items-center gap-1 text-[10px] text-black/80">
                                 <Clock3 className="h-2.5 w-2.5" />
                                 {fmtHour(b.start)}–{fmtHour(endOf(b))}
                               </p>
@@ -254,7 +254,7 @@ export default function AgendamentosPage() {
         <div className="mt-4 ev-card rounded-[6px] border border-black/10 p-4">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-[13px] font-semibold">Ajuste manual</h2>
-            <p className="text-[11px] #000000/60">
+            <p className="text-[11px] text-black/60">
               clique numa reserva pra liberar ou cancelar o conector
             </p>
           </div>
@@ -270,7 +270,7 @@ export default function AgendamentosPage() {
                 >
                   <div className="min-w-0">
                     <p className="truncate text-[12px] font-medium">{b.user}</p>
-                    <p className="mt-0.5 truncate text-[11px] #000000/70">
+                    <p className="mt-0.5 truncate text-[11px] text-black/70">
                       {p.neighborhood} · {b.connectorId} · {fmtHour(b.start)}
                     </p>
                     <span
@@ -292,7 +292,7 @@ export default function AgendamentosPage() {
                       })
                     }
                     aria-label={`Cancelar reserva de ${b.user}`}
-                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] border border-black/10 #000000 transition-colors hover:border-danger/40 hover:bg-danger/10 hover:text-danger"
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] border border-black/10 text-black transition-colors hover:border-danger/40 hover:bg-danger/10 hover:text-danger"
                   >
                     <Ban className="h-3.5 w-3.5" />
                   </button>
