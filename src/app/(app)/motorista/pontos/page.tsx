@@ -45,35 +45,35 @@ export default function PontosPage() {
             return (
               <div
                 key={p.id}
-                className="rounded-[6px] border border-black/10 bg-white p-4 transition-colors hover:border-black/20"
+                className="rounded-[6px] border border-black/10 bg-white p-4 transition-colors hover:border-black/20 sm:p-5"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h2 className="truncate text-[15px] font-semibold">{p.name}</h2>
-                    <p className="mt-1 flex items-center gap-1.5 text-[12px] text-black/70">
-                      <MapPin className="h-3 w-3" aria-hidden="true" />
-                      {p.address}
-                    </p>
-                    <p className="mt-0.5 flex items-center gap-1.5 text-[12px] text-black/55">
-                      <Clock className="h-3 w-3" aria-hidden="true" />
-                      {p.openHours}
-                    </p>
-                  </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0 sm:flex-1">
+                <h2 className="truncate text-[15px] font-semibold sm:text-base">{p.name}</h2>
+                <p className="mt-1.5 flex items-start gap-1.5 text-[12px] text-black/70 sm:text-[13px]">
+                  <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span>{p.address}</span>
+                </p>
+                <p className="mt-1 flex items-center gap-1.5 text-[12px] text-black/55 sm:text-[13px]">
+                  <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  {p.openHours}
+                </p>
+              </div>
 
-                  <div className="shrink-0 text-right">
-                    <div className="text-[20px] font-semibold tabular-nums leading-none">
-                      {free}
-                      <span className="text-[12px] text-black/55">
-                        /{p.connectors.length}
-                      </span>
-                    </div>
-                    <div className="mt-1 text-[10px] font-semibold text-black/55">
-                      livres
-                    </div>
-                  </div>
+              <div className="flex items-center gap-2 self-start sm:shrink-0 sm:flex-col sm:items-end sm:gap-0.5">
+                <div className="text-[22px] font-semibold tabular-nums leading-none sm:text-[24px]">
+                  {free}
+                  <span className="text-[13px] text-black/55">
+                    /{p.connectors.length}
+                  </span>
                 </div>
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-black/55">
+                  livres
+                </div>
+              </div>
+            </div>
 
-                <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
                   {p.connectors.map((c) => (
                     <span
                       key={c.id}
@@ -94,14 +94,14 @@ export default function PontosPage() {
                 <div className="mt-3 flex items-center gap-2 border-t border-black/10 pt-3">
                   <Link
                     href={`/motorista/vagas?ponto=${p.id}`}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-[6px] border border-black/10 bg-black/5 px-3 text-[12px] font-semibold text-black transition-colors hover:bg-black/10"
+                    className="inline-flex h-11 items-center gap-1.5 rounded-[6px] border border-black/10 bg-black/5 px-4 text-[13px] font-semibold text-black transition-colors hover:bg-black/10"
                   >
                     Ver vagas
                     <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
                   </Link>
                   <Link
                     href={`/motorista/reservar?ponto=${p.id}`}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-[6px] border border-[#16a34a]/20 bg-[#16a34a]/10 px-3 text-[12px] font-semibold text-[#16a34a] transition-colors hover:bg-[#16a34a]/15"
+                    className="inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-[6px] border border-[#16a34a]/30 bg-[#16a34a] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-[#15803d]"
                   >
                     Reservar
                   </Link>

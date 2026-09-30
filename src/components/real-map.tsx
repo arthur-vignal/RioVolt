@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { Point, Connector } from "@/lib/mock-data";
 
 /**
@@ -11,6 +11,19 @@ import type { Point, Connector } from "@/lib/mock-data";
  *   - lista de conectores com status (Livre / Reservado / Em uso / Offline)
  *   - se em uso: estimativa "carregando XkWh de YkWh, livre em ~Zmin"
  *     calculada a partir de (now - startedAt) * potencia_kW
+ *
+ * Bug que estava aqui antes: o effect que cria o mapa e o effect que cria
+ * os markers dependiam de estados diferentes. Quando `points` chegava
+ * ([] → Point[]) o effect do mapa rodava async (await do leaflet) e o effect
+ * dos markers rodava sincronamente no mesmo tick — encontrava `mapRef =
+ * null` e saía sem criar nada. Depois o mapa era criado mas nada
+ * re-disparava.
+ *
+ * Solução: UM effect que inicializa tudo quando points chega pela primeira
+ * vez, e um SEPARADO que só re-renderiza markers quando points muda (mas
+ * só roda SE o mapa já existe). Pra evitar race condition, o segundo
+ * effect escuta `points` E também `mapRef.current` indireto via callback
+ * que é acionado quando init termina.
  */
 
 type ChargeInfo = {
@@ -30,7 +43,7 @@ function fmtMin(min: number): string {
 function estimateLoadedKwh(
   startedAtMs: number,
   powerKw: number,
-  maxKwh: number
+  maxKwh: number,
 ): number {
   const elapsedH = (Date.now() - startedAtMs) / (1000 * 60 * 60);
   if (elapsedH <= 0) return 0;
@@ -39,7 +52,7 @@ function estimateLoadedKwh(
 
 function buildPopupHtml(
   point: Point,
-  chargeByConnector: Record<string, ChargeInfo>
+  chargeByConnector: Record<string, ChargeInfo>,
 ): string {
   const rows = point.connectors
     .map((c) => {
@@ -49,16 +62,16 @@ function buildPopupHtml(
         status === "free"
           ? "Livre"
           : status === "reserved"
-          ? "Reservado"
-          : status === "in_use"
-          ? "Em uso"
-          : "Fora de serviço";
+            ? "Reservado"
+            : status === "in_use"
+              ? "Em uso"
+              : "Fora de serviço";
       const statusColor =
         status === "free"
           ? "#16a34a"
           : status === "offline"
-          ? "#9ca3af"
-          : "#111";
+            ? "#9ca3af"
+            : "#111";
 
       let detail = "";
       if (status === "in_use" && chargeByConnector[id]) {
@@ -111,12 +124,25 @@ export function RealMap({
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const layerRef = useRef<any>(null);
-  const [ready, setReady] = useState(false);
+  // Guarda os pontos atuais numa ref pra usar dentro do callback de init.
+  const pointsRef = useRef<Point[]>(points);
+  const chargesRef = useRef<Record<string, ChargeInfo>>(chargeByConnector);
 
-  // 1) Cria o mapa UMA vez, depois que os pontos chegam.
+  // Mantém as refs sincronizadas com as props sem disparar o effect de init.
+  useEffect(() => {
+    pointsRef.current = points;
+    chargesRef.current = chargeByConnector;
+    // Se o mapa já tá criado, só re-renderiza os markers (não recria mapa).
+    if (mapRef.current && layerRef.current) {
+      renderMarkers(mapRef.current, layerRef.current, points, chargeByConnector);
+    }
+  }, [points, chargeByConnector]);
+
+  // Effect único de inicialização: roda UMA vez quando o componente monta.
+  // (Strict Mode pode chamar cleanup + setup, mas a guarda de mapRef evita
+  // criar mapa duplicado.)
   useEffect(() => {
     if (!ref.current || mapRef.current) return;
-    if (points.length === 0) return;
 
     let cancelled = false;
 
@@ -129,6 +155,8 @@ export function RealMap({
         const map = L.map(ref.current, {
           center: [-22.97, -43.28],
           zoom: 12,
+          minZoom: 11,
+          maxZoom: 17,
           zoomControl: false,
           attributionControl: true,
           scrollWheelZoom: true,
@@ -142,14 +170,25 @@ export function RealMap({
             attribution:
               "Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ, TomTom, Intermap, iPC, USGS, FAO, NPS, NRCAN, GeoBase, Kadaster NL, Ordnance Survey, Esri Japan, METI, Esri China (Hong Kong), and the GIS User Community",
             maxZoom: 16,
-          }
+          },
         ).addTo(map);
 
-        // Camada de marcadores (limpa a cada re-render dos pontos).
-        layerRef.current = L.layerGroup().addTo(map);
+        const layer = L.layerGroup().addTo(map);
 
+        // Marca como pronto ANTES de renderizar markers pra evitar race.
         mapRef.current = map;
-        setReady(true);
+        layerRef.current = layer;
+
+        // Renderiza os markers que já chegaram (pointsRef fica atualizada
+        // via effect de sincronização acima).
+        if (pointsRef.current.length > 0) {
+          renderMarkers(
+            map,
+            layer,
+            pointsRef.current,
+            chargesRef.current,
+          );
+        }
       } catch {
         // ignore double-init in Strict Mode
       }
@@ -158,69 +197,7 @@ export function RealMap({
     return () => {
       cancelled = true;
     };
-  }, [points.length === 0]);
-
-  // 2) Re-renderiza os markers sempre que a lista de pontos (ou charges)
-  //    mudar. O mapa em si persiste.
-  useEffect(() => {
-    const map = mapRef.current;
-    const layer = layerRef.current;
-    if (!map || !layer) return;
-    if (points.length === 0) return;
-
-    let cancelled = false;
-
-    (async () => {
-      const L = (await import("leaflet")).default;
-      if (cancelled || !map || !layer) return;
-
-      layer.clearLayers();
-
-      points.forEach((p) => {
-        const worst: Connector | undefined =
-          p.connectors.find((c) => c.status === "offline") ||
-          p.connectors.find((c) => c.status === "in_use") ||
-          p.connectors.find((c) => c.status === "reserved") ||
-          p.connectors.find((c) => c.status === "free");
-        const color =
-          worst?.status === "free"
-            ? "#16a34a"
-            : worst?.status === "offline"
-            ? "#9ca3af"
-            : "#111111";
-
-        const marker = L.circleMarker([p.lat, p.lon], {
-          radius: 9,
-          color,
-          weight: 2,
-          opacity: 1,
-          fillColor: "#ffffff",
-          fillOpacity: 1,
-        }).addTo(layer);
-
-        marker.bindTooltip(`${p.name}\n${p.neighborhood}`, {
-          direction: "top",
-          offset: [0, -4],
-        });
-
-        marker.bindPopup(buildPopupHtml(p, chargeByConnector), {
-          maxWidth: 280,
-          closeButton: true,
-          autoPan: true,
-        });
-      });
-
-      map.fitBounds(
-        // @ts-ignore
-        L.latLngBounds(points.map((p) => [p.lat, p.lon])).pad(0.25),
-        { animate: false }
-      );
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [points, JSON.stringify(chargeByConnector)]);
+  }, []);
 
   // Cleanup geral quando o componente desmonta.
   useEffect(() => {
@@ -236,13 +213,60 @@ export function RealMap({
   }, []);
 
   return (
-    <div className="relative h-[420px] w-full overflow-hidden rounded-[6px] border border-black/10 bg-[#f8f9fa]">
+    <div className="relative h-[260px] w-full overflow-hidden rounded-[6px] border border-black/10 bg-[#f8f9fa] sm:h-[420px]">
       <div ref={ref} className="absolute inset-0" />
-      {!ready ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-[#f8f9fa] text-[13px] text-black/55">
-          Carregando mapa...
-        </div>
-      ) : null}
     </div>
   );
+}
+
+/** Renderiza markers + ajusta viewport pra caber todos. Async pq Leaflet
+ *  foi carregado via dynamic import (não tem global `L`). */
+async function renderMarkers(
+  map: any,
+  layer: any,
+  points: Point[],
+  chargeByConnector: Record<string, ChargeInfo>,
+) {
+  if (!map || !layer || points.length === 0) return;
+  const L = (await import("leaflet")).default;
+
+  layer.clearLayers();
+
+  points.forEach((p) => {
+    const worst: Connector | undefined =
+      p.connectors.find((c) => c.status === "offline") ||
+      p.connectors.find((c) => c.status === "in_use") ||
+      p.connectors.find((c) => c.status === "reserved") ||
+      p.connectors.find((c) => c.status === "free");
+    const color =
+      worst?.status === "free"
+        ? "#16a34a"
+        : worst?.status === "offline"
+          ? "#9ca3af"
+          : "#111111";
+
+    const marker = L.circleMarker([p.lat, p.lon], {
+      radius: 9,
+      color,
+      weight: 2,
+      opacity: 1,
+      fillColor: "#ffffff",
+      fillOpacity: 1,
+    }).addTo(layer);
+
+    marker.bindTooltip(`${p.name}\n${p.neighborhood}`, {
+      direction: "top",
+      offset: [0, -4],
+    });
+
+    marker.bindPopup(buildPopupHtml(p, chargeByConnector), {
+      maxWidth: 280,
+      closeButton: true,
+      autoPan: true,
+    });
+  });
+
+  map.fitBounds(L.latLngBounds(points.map((p) => [p.lat, p.lon])).pad(0.25), {
+    animate: false,
+  });
 }

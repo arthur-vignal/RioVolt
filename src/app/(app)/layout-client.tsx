@@ -29,13 +29,16 @@ export function Shell({ scope, children }: { scope: Scope; children: ReactNode }
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Topbar mobile — só a marca, nav fica embaixo */}
-        <header className="flex items-center justify-between gap-4 border-b border-black/10 bg-white px-4 py-3 lg:hidden">
+        {/* Topbar mobile — marca + badge de role. Nav fica embaixo */}
+        <header className="flex items-center justify-between gap-4 border-b border-black/10 bg-white px-4 py-4 lg:hidden">
           <Brand scope={scope} />
+          <span className="rounded-full bg-black/5 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-black/55">
+            Motorista
+          </span>
         </header>
 
-        {/* Padding-bottom reserva espaço pra bottom-nav em mobile */}
-        <main className="flex-1 px-4 pb-24 pt-5 sm:px-6 lg:px-8 lg:pb-8 lg:pt-8">
+        {/* Padding-bottom reserva espaço pra bottom-nav (~56px) + safe area */}
+        <main className="flex-1 px-4 pb-28 pt-4 sm:px-6 sm:pt-6 lg:px-8 lg:pb-8 lg:pt-8">
           {children}
         </main>
       </div>

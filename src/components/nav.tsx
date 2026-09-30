@@ -126,8 +126,8 @@ export function BottomNav({ scope }: { scope: Scope }) {
   const pathname = usePathname();
   const items = scope === "motorista" ? MOTORISTA_PRIMARY : DONOS_NAV.slice(0, 4);
   return (
-    <nav
-      className="fixed inset-x-0 bottom-0 z-20 grid border-t border-black/10 bg-white pb-[env(safe-area-inset-bottom)] lg:hidden"
+      <nav
+      className="fixed inset-x-0 bottom-0 z-20 grid border-t border-black/10 bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-2px_8px_rgba(0,0,0,0.04)] lg:hidden"
       style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
       aria-label={scope === "motorista" ? "Navegação inferior do motorista" : "Navegação inferior dos donos"}
     >
@@ -140,12 +140,12 @@ export function BottomNav({ scope }: { scope: Scope }) {
             href={item.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "flex min-h-12 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
+              "flex min-h-14 flex-col items-center justify-center gap-1 py-2 text-[11px] font-semibold transition-colors",
               active ? "text-[#16a34a]" : "text-black/55 hover:text-black",
             )}
           >
             <Icon
-              className={cn("h-5 w-5", active ? "text-[#16a34a]" : "text-black/55")}
+              className={cn("h-6 w-6", active ? "text-[#16a34a]" : "text-black/55")}
               strokeWidth={active ? 2.25 : 2}
               aria-hidden="true"
             />
