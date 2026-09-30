@@ -4,14 +4,11 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { VoltrioMark } from "@/components/nav";
 
-type Role = "motorista" | "donos";
-
 export default function SignupPage() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<Role>("motorista");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,11 +24,10 @@ export default function SignupPage() {
       const res = await fetch("/api/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, role }),
+        body: JSON.stringify({ name, email, password, role: "motorista" }),
       });
       const data = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
-        user?: { role: Role };
         error?: string;
       };
       if (!res.ok || !data.ok) {
@@ -39,7 +35,6 @@ export default function SignupPage() {
         setSubmitting(false);
         return;
       }
-      // sucesso: vai pra login com email preenchido
       router.push("/login?signup=ok&email=" + encodeURIComponent(email));
     } catch {
       setError("Erro de rede. Tente novamente.");
@@ -98,48 +93,6 @@ export default function SignupPage() {
               className="w-full rounded-[6px] border border-black/10 bg-white px-3 py-2.5 text-[14px] outline-none focus:border-[#16a34a] focus:ring-2 focus:ring-[#16a34a]/20"
             />
           </label>
-
-          <fieldset className="grid gap-1.5">
-            <legend className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/55">
-              Tipo de conta
-            </legend>
-            <div className="grid grid-cols-2 gap-2">
-              <label
-                className={`cursor-pointer rounded-[6px] border px-3 py-2 text-center text-[13px] font-semibold ${
-                  role === "motorista"
-                    ? "border-[#16a34a] bg-[#16a34a]/10 text-[#16a34a]"
-                    : "border-black/10 bg-white text-black/70"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="role"
-                  value="motorista"
-                  checked={role === "motorista"}
-                  onChange={() => setRole("motorista")}
-                  className="sr-only"
-                />
-                Motorista
-              </label>
-              <label
-                className={`cursor-pointer rounded-[6px] border px-3 py-2 text-center text-[13px] font-semibold ${
-                  role === "donos"
-                    ? "border-[#16a34a] bg-[#16a34a]/10 text-[#16a34a]"
-                    : "border-black/10 bg-white text-black/70"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="role"
-                  value="donos"
-                  checked={role === "donos"}
-                  onChange={() => setRole("donos")}
-                  className="sr-only"
-                />
-                Dono de hub
-              </label>
-            </div>
-          </fieldset>
 
           {error ? (
             <p

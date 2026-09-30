@@ -4,21 +4,26 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { VoltrioMark } from "@/components/nav";
 
-export default function LoginPage() {
+export default function LoginDonoPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function submitCredentials(targetEmail: string, targetPassword: string) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!email || !password) {
+      setError("Informe email e senha.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
       const res = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: targetEmail, password: targetPassword, role: "motorista" }),
+        body: JSON.stringify({ email, password, role: "donos" }),
         credentials: "same-origin",
       });
       const data = (await res.json().catch(() => ({}))) as {
@@ -31,12 +36,12 @@ export default function LoginPage() {
         setSubmitting(false);
         return;
       }
-      if (data.user.role !== "motorista") {
-        setError("Esta conta é de dono. Use /login/dono.");
+      if (data.user.role !== "donos") {
+        setError("Esta conta não é de dono.");
         setSubmitting(false);
         return;
       }
-      router.push("/motorista/pontos");
+      router.push("/donos/agendamentos");
       router.refresh();
     } catch {
       setError("Erro de rede. Tente novamente.");
@@ -44,37 +49,25 @@ export default function LoginPage() {
     }
   }
 
-  async function handleFormSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!email || !password) {
-      setError("Informe email e senha.");
-      return;
-    }
-    await submitCredentials(email, password);
-  }
-
   return (
     <main className="min-h-dvh bg-[#f7f8f6] text-black flex items-center justify-center px-5 py-10">
       <div className="w-full max-w-md rounded-[6px] border border-black/10 bg-white p-6">
         <VoltrioMark />
-        <p className="mt-3 text-[14px] text-black/60">
-          Acesse o painel do motorista ou dos donos.
+        <p className="mt-3 text-[13px] text-black/55">
+          Acesso restrito a donos de hub.
         </p>
 
-        <form onSubmit={handleFormSubmit} className="mt-6 grid gap-3">
+        <form onSubmit={handleSubmit} className="mt-6 grid gap-3">
           <label className="grid gap-1.5">
             <span className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/55">
               Email
             </span>
             <input
               type="email"
-              name="email"
-              autoComplete="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="voce@voltrio.app"
-              className="w-full rounded-[6px] border border-black/10 bg-white px-3 py-2.5 text-[14px] outline-none focus:border-[#16a34a] focus:ring-2 focus:ring-[#16a34a]/20"
+              className="w-full rounded-[6px] border border-black/10 bg-white px-3 py-2.5 text-[14px] outline-none focus:border-[#16a34a]"
             />
           </label>
 
@@ -84,21 +77,15 @@ export default function LoginPage() {
             </span>
             <input
               type="password"
-              name="password"
-              autoComplete="current-password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="volta123"
-              className="w-full rounded-[6px] border border-black/10 bg-white px-3 py-2.5 text-[14px] outline-none focus:border-[#16a34a] focus:ring-2 focus:ring-[#16a34a]/20"
+              className="w-full rounded-[6px] border border-black/10 bg-white px-3 py-2.5 text-[14px] outline-none focus:border-[#16a34a]"
             />
           </label>
 
           {error ? (
-            <p
-              role="alert"
-              className="rounded-[6px] border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700"
-            >
+            <p className="rounded-[6px] border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">
               {error}
             </p>
           ) : null}
@@ -111,16 +98,6 @@ export default function LoginPage() {
             {submitting ? "Entrando..." : "Entrar"}
           </button>
         </form>
-
-        <p className="mt-4 text-center text-[13px] text-black/60">
-          Não tem conta?{" "}
-          <a
-            href="/signup"
-            className="font-semibold text-[#16a34a] hover:underline"
-          >
-            Criar conta
-          </a>
-        </p>
       </div>
     </main>
   );
