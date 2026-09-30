@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const row = getSubscriberByEmail(email);
+  const row = await getSubscriberByEmail(email);
   if (!row) {
     return Response.json(
       { ok: false, error: "Credenciais inválidas." },
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!verifyPassword(row, password)) {
+  if (!(await verifyPassword(row, password))) {
     return Response.json(
       { ok: false, error: "Credenciais inválidas." },
       { status: 401 },

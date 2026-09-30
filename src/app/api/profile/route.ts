@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   if (!userId) {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }
-  const profile = getProfile(userId);
+  const profile = await getProfile(userId);
   if (!profile) {
     return NextResponse.json({ error: "Perfil não encontrado" }, { status: 404 });
   }
@@ -36,6 +36,6 @@ export async function PUT(request: NextRequest) {
   if (typeof b.plate === "string") patch.plate = b.plate.trim().slice(0, 16);
   if (typeof b.vehicle === "string") patch.vehicle = b.vehicle.trim().slice(0, 80);
 
-  const profile = updateProfile(userId, patch);
+  const profile = await updateProfile(userId, patch);
   return NextResponse.json({ profile });
 }

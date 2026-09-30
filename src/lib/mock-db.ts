@@ -1,8 +1,8 @@
 // mock-db.ts — wrapper de compatibilidade.
 //
-// A fonte da verdade agora é src/lib/db.ts (SQLite persistente). Este
-// arquivo mantém `getSnapshot()` para os pontos do código que ainda
-// importam daqui, mas delega tudo para o banco real.
+// A fonte da verdade agora é src/lib/db.ts (fachada SQLite/Postgres).
+// Este arquivo mantém `getSnapshot()` para os pontos do código que ainda
+// importam daqui. `getSnapshot` agora é async porque a fachada retorna Promises.
 
 import {
   PLANS,
@@ -30,18 +30,17 @@ export type DbSnapshot = {
   telemetry: DayPoint[];
 };
 
-/**
- * Retorna um snapshot do estado atual do banco. Lê do SQLite (dados reais).
- * Para campos que ainda não foram migrados (telemetria, ME de exemplo),
- * mantemos o mock estático — em produção ME virá de subscriptions WHERE
- * user_id = session.
- */
-export function getSnapshot(): DbSnapshot {
+export async function getSnapshot(): Promise<DbSnapshot> {
+  const [points, subscribers, bookings] = await Promise.all([
+    listPoints(),
+    listAllSubscribers(),
+    listBookingsForDay("today"),
+  ]);
   return {
-    points: listPoints(),
+    points,
     plans: PLANS,
-    subscribers: listAllSubscribers(),
-    bookings: listBookingsForDay("today"),
+    subscribers,
+    bookings,
     me: ME,
     telemetry: TELEMETRY_30D,
   };

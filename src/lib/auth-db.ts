@@ -30,28 +30,30 @@ export type PublicUser = {
 // Re-export de UserRow do db.ts (pra preservar o tipo usado pelo resto do app).
 export type { UserRow } from "@/lib/db";
 
-export function listAllSubscribers(): PublicUser[] {
+export async function listAllSubscribers(): Promise<PublicUser[]> {
   const { listAllUsers } = require("@/lib/db") as typeof import("@/lib/db");
-  return listAllUsers().map(toPublic);
+  const users = await listAllUsers();
+  return users.map(toPublic);
 }
 
-export function getSubscriberByEmail(email: string): UserRow | null {
+export async function getSubscriberByEmail(email: string): Promise<UserRow | null> {
   const { findUserByEmail } = require("@/lib/db") as typeof import("@/lib/db");
   const normalized = email.trim().toLowerCase();
-  return findUserByEmail(normalized) ?? null;
+  const row = await findUserByEmail(normalized);
+  return row ?? null;
 }
 
-export function getSubscriberById(id: string): PublicUser | null {
+export async function getSubscriberById(id: string): Promise<PublicUser | null> {
   const { findUserById } = require("@/lib/db") as typeof import("@/lib/db");
-  const row = findUserById(id);
+  const row = await findUserById(id);
   return row ? toPublic(row) : null;
 }
 
-export function verifyPassword(row: UserRow, password: string): boolean {
+export async function verifyPassword(row: UserRow, password: string): Promise<boolean> {
   const { verifyPassword: dbVerify } = require("@/lib/db") as typeof import("@/lib/db");
   // db.ts tem verifyPassword(email, password) -> UserRow | null.
   // Mantemos a assinatura antiga passando email + senha:
-  const result = dbVerify(row.email, password);
+  const result = await dbVerify(row.email, password);
   return result !== null;
 }
 

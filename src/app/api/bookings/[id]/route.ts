@@ -14,12 +14,12 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  const booking = getBooking(id);
+  const booking = await getBooking(id);
   if (!booking) {
     return NextResponse.json({ error: "Booking não encontrado" }, { status: 404 });
   }
-  const point = getPoint(booking.pointId);
-  const charge = getCharge(booking.id) ?? null;
+  const point = await getPoint(booking.pointId);
+  const charge = await getCharge(booking.id) ?? null;
   return NextResponse.json({ booking, point, charge });
 }
 
@@ -33,6 +33,6 @@ export async function POST(
   // Mantido pra simetria de rota; a listagem geral é via /api/bookings (root).
   await context.params;
   const userId = getUserIdFromHeaders(request.headers);
-  const charges = listChargesForUser(userId);
+  const charges = await listChargesForUser(userId);
   return NextResponse.json({ charges });
 }

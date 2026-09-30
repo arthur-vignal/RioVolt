@@ -13,7 +13,7 @@ export async function GET() {
     return Response.json({ ok: false, user: null }, { status: 200 });
   }
 
-  const user = getSubscriberById(session.userId);
+  const user = await getSubscriberById(session.userId);
   if (!user) {
     return Response.json({ ok: false, user: null }, { status: 200 });
   }

@@ -1,16 +1,6 @@
-// ops-db.ts — Wrapper síncrono sobre src/lib/db.ts (SQLite). Mantém a API
-// async que o painel dos donos espera, mas persiste no mesmo banco SQLite
-// que o resto do app. Substitui a versão anterior (JSON file).
-//
-// API exposta:
-//   listPoints / listConnectors
-//   listAllBookings / listAllSubscribers
-//   updateBookingStatus(id, status)
-//   updateConnectorStatus(id, status)
-//   updateSubscriberStatus(name, status)
-//   incrementKwh(subscriberName, kwh)
-//   createPoint(input)
-//   getSettings / setSetting(key, value)
+// ops-db.ts — Wrapper async sobre src/lib/db.ts (SQLite ou Postgres).
+// Mantém a API async que o painel dos donos espera. Todas as funções aqui
+// simplesmente delegam para a fachada central do Voltrio.
 
 import type {
   Point,
@@ -20,6 +10,7 @@ import type {
   PointStatus,
   ChargerKind,
 } from "@/lib/mock-data";
+import * as db from "@/lib/db";
 
 export type SubscriberStatus = Subscriber["status"];
 export type BookingStatus = Booking["status"];
@@ -31,16 +22,15 @@ export type Settings = {
 const DEFAULT_SETTINGS: Settings = { kwhPrice: 2.04 };
 
 export async function listPoints(): Promise<Point[]> {
-  const { listPoints: sqlListPoints } = await import("@/lib/db");
-  return sqlListPoints();
+  return db.listPoints();
 }
 
 export async function listConnectors(): Promise<
   Array<Connector & { pointName: string; neighborhood: string }>
 > {
-  const { listPoints } = await import("@/lib/db");
+  const points = await db.listPoints();
   const flat: Array<Connector & { pointName: string; neighborhood: string }> = [];
-  for (const p of listPoints()) {
+  for (const p of points) {
     for (const c of p.connectors) {
       flat.push({ ...c, pointName: p.name, neighborhood: p.neighborhood });
     }
@@ -49,18 +39,15 @@ export async function listConnectors(): Promise<
 }
 
 export async function listAllBookings(): Promise<Booking[]> {
-  const { listBookingsForDay } = await import("@/lib/db");
-  return listBookingsForDay("");
+  return db.listBookingsForDay("");
 }
 
 export async function listAllSubscribers(): Promise<Subscriber[]> {
-  const { listAllSubscribers: sqlListAllSubscribers } = await import("@/lib/db");
-  return sqlListAllSubscribers();
+  return db.listAllSubscribers();
 }
 
 export async function readSettings(): Promise<Settings> {
-  const { getSettingNumber } = await import("@/lib/db");
-  const v = getSettingNumber("kwhPrice");
+  const v = await db.getSettingNumber("kwhPrice");
   return { kwhPrice: v ?? DEFAULT_SETTINGS.kwhPrice };
 }
 
@@ -68,16 +55,15 @@ export async function updateBookingStatus(
   id: string,
   status: BookingStatus,
 ): Promise<Booking | null> {
-  const { updateBookingStatus: sqlUpdate } = await import("@/lib/db");
-  return sqlUpdate(id, status) ?? null;
+  const b = await db.updateBookingStatus(id, status);
+  return b ?? null;
 }
 
 export async function updateConnectorStatus(
   connectorId: string,
   status: PointStatus,
 ): Promise<{ connectorId: string; status: PointStatus } | null> {
-  const { updateConnectorStatus: sqlUpdate } = await import("@/lib/db");
-  const ok = sqlUpdate(connectorId, status);
+  const ok = await db.updateConnectorStatus(connectorId, status);
   return ok ? { connectorId, status } : null;
 }
 
@@ -85,16 +71,14 @@ export async function updateSubscriberStatus(
   name: string,
   status: SubscriberStatus,
 ): Promise<Subscriber | null> {
-  const { updateSubscriberStatusByName } = await import("@/lib/db");
-  return updateSubscriberStatusByName(name, status);
+  return db.updateSubscriberStatusByName(name, status);
 }
 
 export async function incrementKwh(
   subscriberName: string,
   deltaKwh: number,
 ): Promise<Subscriber | null> {
-  const { incrementKwhByName } = await import("@/lib/db");
-  return incrementKwhByName(subscriberName, deltaKwh);
+  return db.incrementKwhByName(subscriberName, deltaKwh);
 }
 
 export type CreatePointInput = {
@@ -108,25 +92,22 @@ export type CreatePointInput = {
 };
 
 export async function createPoint(input: CreatePointInput): Promise<Point> {
-  const { createPoint: sqlCreatePoint } = await import("@/lib/db");
-  return sqlCreatePoint(input);
+  return db.createPoint(input);
 }
 
 export async function getSetting<K extends keyof Settings>(
   key: K,
 ): Promise<Settings[K]> {
-  const { getSetting } = await import("@/lib/db");
-  const v = await getSetting(key);
+  const v = await db.getSetting(key);
   if (v == null) return DEFAULT_SETTINGS[key] as Settings[K];
   if (key === "kwhPrice") return Number(v) as Settings[K];
-  return v as Settings[K];
+  return v as unknown as Settings[K];
 }
 
 export async function setSetting<K extends keyof Settings>(
   key: K,
   value: Settings[K],
 ): Promise<Settings> {
-  const { setSetting } = await import("@/lib/db");
-  setSetting(key, value as unknown as string | number);
+  await db.setSetting(key, value as unknown as string | number);
   return readSettings();
 }

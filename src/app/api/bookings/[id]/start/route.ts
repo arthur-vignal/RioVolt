@@ -10,7 +10,7 @@ export async function POST(
   const { id } = await context.params;
   const userId = getUserIdFromHeaders(request.headers);
   if (!userId) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-  const result = startCharge({ userId, bookingId: id });
+  const result = await startCharge({ userId, bookingId: id });
   if (!result.ok) {
     const status = /não encontrado|inválido/i.test(result.error) ? 400 : 403;
     return NextResponse.json({ error: result.error }, { status });

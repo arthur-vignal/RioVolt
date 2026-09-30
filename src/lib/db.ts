@@ -1,571 +1,71 @@
 /**
- * db.ts — Camada de persistência do Voltrio.
+ * db.ts — Fachada única de persistência do Voltrio.
  *
- * Banco SQLite local via better-sqlite3. Singleton no processo Node: a
- * primeira chamada a qualquer função pública abre o arquivo, cria o schema
- * e roda o seed automaticamente se as tabelas estiverem vazias.
+ * Em dev local (sem DATABASE_URL), usa SQLite (better-sqlite3) com arquivo
+ * em .data/voltrio.db.
  *
- * Path do arquivo: <repo>/.data/voltrio.db (gitignored).
+ * Em produção (DATABASE_URL presente, ex: Postgres no Railway/Supabase),
+ * delega para o módulo pg e usa Postgres.
  *
- * Senha de demo: "volta123" para todos os usuários.
+ * A API pública abaixo é a MESMA nos dois backends — as páginas /api/*
+ * consomem isso sem saber qual banco está ativo.
  *
- * API pública:
- *   // leitura
- *   listPoints()                          → Point[] (com connectors aninhados)
- *   listConnectors()                      → Connector[] (todas)
- *   listBookingsForDay(date)              → Booking[]  (date: YYYY-MM-DD)
- *   getSubscriberByEmail(email)           → Subscriber | undefined
- *   listAllSubscribers()                  → Subscriber[]
- *   findUserByEmail(email)                → UserRow | undefined
- *   verifyPassword(email, password)       → UserRow | null
+ * Senha de demo (todos os usuários): "volta123"
  *
- *   // escrita
- *   createBooking(input)                  → Booking (lança se conflito)
- *   cancelBooking(id)                     → Booking | undefined
- *   updateBookingStatus(id, status)       → Booking | undefined
- *   incrementSubscriptionKwh(subId, kwh)  → number (novo kwh_used)
- *   updateSubscriberStatus(id, status)    → Subscriber | undefined
- *
- *   // utilidade
- *   initSeed()                            → força inicialização/seed
+ * API:
+ *   listPoints, listConnectors, listBookingsForDay
+ *   getSubscriberByEmail, listAllSubscribers, listAllUsers
+ *   findUserByEmail, findUserById, verifyPassword
+ *   createBooking, cancelBooking, updateBookingStatus
+ *   incrementSubscriptionKwh, updateSubscriberStatus
+ *   updateSubscriberStatusByName, incrementKwhByName
+ *   updateConnectorStatus, createPoint
+ *   getSetting, getSettingNumber, setSetting
+ *   getProfile, updateProfile
+ *   getBooking, getPoint
+ *   listBookingsForUser, listChargesForUser
+ *   startCharge, createReservation
+ *   initSeed
  */
 
-import Database from "better-sqlite3";
-import path from "node:path";
-import fs from "node:fs";
-import bcrypt from "bcryptjs";
-import { z } from "zod";
+const HAS_PG = !!process.env.DATABASE_URL;
 
-import {
-  POINTS,
-  SUBSCRIBERS,
-  BOOKINGS,
-  ME,
-  type Point,
-  type Connector,
-  type Booking,
-  type Subscriber,
-  type PlanId,
-  type ChargerKind,
-  type PointStatus,
-} from "@/lib/mock-data";
+type PgModule = typeof import("./db-pg");
+type SqliteModule = typeof import("./db-sqlite");
 
-// ---------------------------------------------------------------- paths
-// Em Railway, DATA_DIR=/data aponta pro volume persistente.
-// Em dev local, cai em <repo>/.data.
-const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), ".data");
-const DB_PATH = path.join(DATA_DIR, "voltrio.db");
+let _pg: PgModule | null = null;
+let _sqlite: SqliteModule | null = null;
 
-function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+function pg(): PgModule {
+  if (!_pg) {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    _pg = require("./db-pg") as PgModule;
+  }
+  return _pg;
 }
 
-// ---------------------------------------------------------------- singleton
-
-let _db: Database.Database | null = null;
-let _seeded = false;
-
-function db(): Database.Database {
-  if (_db) return _db;
-  ensureDataDir();
-  const conn = new Database(DB_PATH);
-  conn.pragma("journal_mode = WAL");
-  conn.pragma("foreign_keys = ON");
-  createSchema(conn);
-  _db = conn;
-  const count = (conn.prepare("SELECT COUNT(*) AS n FROM points").get() as { n: number }).n;
-  if (count === 0) seed(conn);
-  _seeded = true;
-  logInitBanner(conn);
-  return conn;
+function sqlite(): SqliteModule {
+  if (!_sqlite) {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    _sqlite = require("./db-sqlite") as SqliteModule;
+  }
+  return _sqlite;
 }
 
-// ---------------------------------------------------------------- schema
-
-function createSchema(conn: Database.Database) {
-  conn.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id              TEXT PRIMARY KEY,
-      email           TEXT NOT NULL UNIQUE,
-      role            TEXT NOT NULL CHECK (role IN ('motorista','donos')),
-      password_hash   TEXT NOT NULL,
-      name            TEXT NOT NULL,
-      plate           TEXT,
-      car_model       TEXT,
-      kwh_plan_limit  INTEGER,
-      created_at      TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS points (
-      id            TEXT PRIMARY KEY,
-      name          TEXT NOT NULL,
-      neighborhood  TEXT NOT NULL,
-      focus         TEXT NOT NULL CHECK (focus IN ('moradores','motoristas')),
-      address       TEXT NOT NULL,
-      lat           REAL NOT NULL,
-      lon           REAL NOT NULL,
-      open_hours    TEXT NOT NULL,
-      partner       TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS connectors (
-      id          TEXT PRIMARY KEY,
-      point_id    TEXT NOT NULL REFERENCES points(id) ON DELETE CASCADE,
-      kind        TEXT NOT NULL CHECK (kind IN ('AC','DC')),
-      power_kw    REAL NOT NULL,
-      status      TEXT NOT NULL CHECK (status IN ('free','reserved','in_use','offline')),
-      note        TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS bookings (
-      id            TEXT PRIMARY KEY,
-      user_id       TEXT REFERENCES users(id) ON DELETE SET NULL,
-      connector_id  TEXT NOT NULL REFERENCES connectors(id) ON DELETE CASCADE,
-      point_id      TEXT NOT NULL REFERENCES points(id) ON DELETE CASCADE,
-      plan          TEXT NOT NULL CHECK (plan IN ('noturno','pro')),
-      start_hour    REAL NOT NULL,
-      duration_min  INTEGER NOT NULL,
-      status        TEXT NOT NULL CHECK (status IN ('confirmed','pending','cancelled','no_show','done','in_progress')),
-      created_at    TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS subscriptions (
-      id            INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      plan          TEXT NOT NULL CHECK (plan IN ('noturno','pro')),
-      kwh_used      REAL NOT NULL DEFAULT 0,
-      monthly_fee   REAL NOT NULL,
-      since         TEXT NOT NULL,
-      next_renewal  TEXT NOT NULL,
-      payment_ok    INTEGER NOT NULL DEFAULT 1
-    );
-
-    CREATE TABLE IF NOT EXISTS subscribers (
-      id            INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id       TEXT REFERENCES users(id) ON DELETE SET NULL,
-      name          TEXT NOT NULL,
-      plan          TEXT NOT NULL CHECK (plan IN ('noturno','pro')),
-      status        TEXT NOT NULL CHECK (status IN ('ativo','inadimplente','cancelado')),
-      since         TEXT NOT NULL,
-      kwh30d        REAL NOT NULL DEFAULT 0,
-      monthly_fee   REAL NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_connectors_point ON connectors(point_id);
-    CREATE INDEX IF NOT EXISTS idx_bookings_conn ON bookings(connector_id);
-    CREATE INDEX IF NOT EXISTS idx_subs_user ON subscriptions(user_id);
-    CREATE INDEX IF NOT EXISTS idx_subscribers_user ON subscribers(user_id);
-
-    -- Histórico de cargas concluídas. Criado pelo fluxo "Encerrar carga".
-    CREATE TABLE IF NOT EXISTS charges (
-      id              TEXT PRIMARY KEY,
-      booking_id      TEXT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
-      user_id         TEXT REFERENCES users(id) ON DELETE SET NULL,
-      connector_id    TEXT NOT NULL,
-      started_at      TEXT NOT NULL,
-      ended_at        TEXT,
-      kwh             REAL NOT NULL DEFAULT 0,
-      amount_brl      REAL NOT NULL DEFAULT 0
-    );
-    CREATE INDEX IF NOT EXISTS idx_charges_user ON charges(user_id);
-
-    -- Configurações globais (chave/valor). Substitui o antigo ops.json.
-    CREATE TABLE IF NOT EXISTS settings (
-      key   TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    );
-    INSERT OR IGNORE INTO settings (key, value) VALUES ('kwhPrice', '2.04');
-  `);
-}
-
-// ---------------------------------------------------------------- seed
-
-const DEMO_PASSWORD = "volta123";
-
-function hash(p: string) {
-  return bcrypt.hashSync(p, 10);
-}
-
-function seed(conn: Database.Database) {
-  const tx = conn.transaction(() => {
-    // 1. users (3 motoristas + 1 dono), senha "volta123"
-    const insertUser = conn.prepare(
-      `INSERT INTO users (id, email, role, password_hash, name, plate, car_model, kwh_plan_limit)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    );
-    insertUser.run(
-      "user-1", "mariana@voltrio.local", "motorista", hash(DEMO_PASSWORD),
-      "Mariana Souza", "RIO-2A19", "BYD Dolphin", 200
-    );
-    insertUser.run(
-      "user-2", "rafael@voltrio.local", "motorista", hash(DEMO_PASSWORD),
-      "Rafael Mendes", "RIO-3B42", "Volvo EX30", 200
-    );
-    insertUser.run(
-      "user-3", "carlos@voltrio.local", "motorista", hash(DEMO_PASSWORD),
-      "Carlos Andrade", "RIO-4C77", "Renault Kwid E-Tech", 200
-    );
-    insertUser.run(
-      "owner-1", "dono@voltrio.local", "donos", hash(DEMO_PASSWORD),
-      "Bruno Tavares", null, null, null
-    );
-
-    // 2. points + connectors
-    const insertPoint = conn.prepare(
-      `INSERT INTO points (id, name, neighborhood, focus, address, lat, lon, open_hours, partner)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    );
-    const insertConn = conn.prepare(
-      `INSERT INTO connectors (id, point_id, kind, power_kw, status, note)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    );
-    for (const p of POINTS) {
-      insertPoint.run(p.id, p.name, p.neighborhood, p.focus, p.address, p.lat, p.lon, p.openHours, p.partner);
-      for (const c of p.connectors) {
-        insertConn.run(c.id, p.id, c.kind, c.powerKw, c.status, c.note ?? null);
-      }
-    }
-
-    // 3. subscriptions (assinatura ativa pro motorista 1, ancorada no ME)
-    conn
-      .prepare(
-        `INSERT INTO subscriptions (user_id, plan, kwh_used, monthly_fee, since, next_renewal, payment_ok)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run("user-1", ME.planId, ME.kwhUsed, ME.monthlyFee, ME.since, ME.nextRenewal, ME.paymentOk ? 1 : 0);
-
-    // 4. subscribers (lista do painel)
-    const insertSubs = conn.prepare(
-      `INSERT INTO subscribers (user_id, name, plan, status, since, kwh30d, monthly_fee)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    );
-    for (const sub of SUBSCRIBERS) {
-      const linkedUser =
-        sub.name === "Bruno Tavares" ? "owner-1"
-        : sub.name === "Mariana Souza" ? "user-1"
-        : sub.name === "Rafael Mendes" ? "user-2"
-        : sub.name === "Carlos Andrade" ? "user-3"
-        : null;
-      insertSubs.run(linkedUser, sub.name, sub.planId, sub.status, sub.since, sub.kwh30d, sub.monthlyFee);
-    }
-
-    // 5. bookings (seed inicial a partir do BOOKINGS mock)
-    const insertBooking = conn.prepare(
-      `INSERT INTO bookings (id, user_id, connector_id, point_id, plan, start_hour, duration_min, status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
-    );
-    // resolve point_id a partir do connector
-    const pointIdByConnector = new Map<string, string>();
-    for (const row of conn.prepare("SELECT id, point_id FROM connectors").all() as Array<{ id: string; point_id: string }>) {
-      pointIdByConnector.set(row.id, row.point_id);
-    }
-    for (const b of BOOKINGS) {
-      const pid = pointIdByConnector.get(b.connectorId);
-      if (!pid) continue;
-      insertBooking.run(b.id, null, b.connectorId, pid, b.planId, b.start, b.durationMin, b.status);
-    }
-  });
-  tx();
-}
-
-// ---------------------------------------------------------------- init log
-
-function logInitBanner(conn: Database.Database) {
-  const get = (sql: string) => (conn.prepare(sql).get() as { n: number }).n;
-  // eslint-disable-next-line no-console
-  console.log(
-    `[voltrio/db] DB initialized: ${get("SELECT COUNT(*) AS n FROM points")} points, ` +
-    `${get("SELECT COUNT(*) AS n FROM connectors")} connectors, ` +
-    `${get("SELECT COUNT(*) AS n FROM users")} users, ` +
-    `${get("SELECT COUNT(*) AS n FROM bookings")} bookings, ` +
-    `${get("SELECT COUNT(*) AS n FROM subscribers")} subscribers → ${DB_PATH}`
-  );
-}
-
-/** Força inicialização + seed (idempotente; uso interno). */
-export function initSeed() {
-  if (_seeded) return;
-  const conn = db();
-  const pts = (conn.prepare("SELECT COUNT(*) AS n FROM points").get() as { n: number }).n;
-  if (pts === 0) seed(conn);
-}
-
-// ---------------------------------------------------------------- mappers
-
-type PointRow = {
-  id: string;
-  name: string;
-  neighborhood: string;
-  focus: "moradores" | "motoristas";
-  address: string;
-  lat: number;
-  lon: number;
-  open_hours: string;
-  partner: string;
-};
-
-type ConnectorRow = {
-  id: string;
-  point_id: string;
-  kind: ChargerKind;
-  power_kw: number;
-  status: PointStatus;
-  note: string | null;
-};
-
-type BookingRow = {
-  id: string;
-  user_id: string | null;
-  connector_id: string;
-  point_id: string;
-  plan: PlanId;
-  start_hour: number;
-  duration_min: number;
-  status: Booking["status"];
-  created_at: string;
-};
-
-type SubscriberRow = {
-  id: number;
-  user_id: string | null;
-  name: string;
-  plan: PlanId;
-  status: Subscriber["status"];
-  since: string;
-  kwh30d: number;
-  monthly_fee: number;
-};
+// ---------------------------------------------------------------- delegates
+// Cada função abaixo delega pro backend certo, normalizando a Promise
+// (sqlite já é síncrono, então empacotamos em Promise.resolve quando necessário).
 
 export type UserRow = {
   id: string;
   email: string;
   role: "motorista" | "donos";
-  password_hash: string;
   name: string;
   plate: string | null;
   car_model: string | null;
   kwh_plan_limit: number | null;
   created_at: string;
 };
-
-function rowToConnector(r: ConnectorRow): Connector {
-  return {
-    id: r.id,
-    pointId: r.point_id,
-    kind: r.kind,
-    powerKw: r.power_kw,
-    status: r.status,
-    note: r.note ?? undefined,
-  };
-}
-
-function rowToPoint(p: PointRow, conns: Connector[]): Point {
-  return {
-    id: p.id,
-    name: p.name,
-    neighborhood: p.neighborhood,
-    focus: p.focus,
-    address: p.address,
-    lat: p.lat,
-    lon: p.lon,
-    openHours: p.open_hours,
-    partner: p.partner,
-    connectors: conns,
-  };
-}
-
-function rowToBooking(r: BookingRow): Booking {
-  // Compat com a UI atual: Booking tem `user: string` (nome humano).
-  let userName = "—";
-  if (r.user_id) {
-    const u = db().prepare("SELECT name FROM users WHERE id = ?").get(r.user_id) as { name: string } | undefined;
-    if (u) userName = u.name;
-  }
-  return {
-    id: r.id,
-    connectorId: r.connector_id,
-    pointId: r.point_id,
-    user: userName,
-    planId: r.plan,
-    start: r.start_hour,
-    durationMin: r.duration_min,
-    status: r.status,
-  };
-}
-
-function rowToSubscriber(r: SubscriberRow): Subscriber {
-  return {
-    name: r.name,
-    planId: r.plan,
-    status: r.status,
-    since: r.since,
-    kwh30d: r.kwh30d,
-    monthlyFee: r.monthly_fee,
-  };
-}
-
-// ---------------------------------------------------------------- reads
-
-export function listPoints(): Point[] {
-  const conn = db();
-  const points = conn.prepare("SELECT * FROM points").all() as PointRow[];
-  const conns = conn.prepare("SELECT * FROM connectors").all() as ConnectorRow[];
-  const byPoint = new Map<string, Connector[]>();
-  for (const c of conns) {
-    const arr = byPoint.get(c.point_id) ?? [];
-    arr.push(rowToConnector(c));
-    byPoint.set(c.point_id, arr);
-  }
-  return points.map((p) => rowToPoint(p, byPoint.get(p.id) ?? []));
-}
-
-export function listConnectors(): Connector[] {
-  return (db().prepare("SELECT * FROM connectors").all() as ConnectorRow[]).map(rowToConnector);
-}
-
-export function listBookingsForDay(_date: string): Booking[] {
-  // O schema atual guarda `start_hour` em decimal (0–24) sem coluna de dia.
-  // Retornamos TODAS as reservas (incluindo canceladas/done) ordenadas por horário.
-  const conn = db();
-  const rows = conn
-    .prepare(
-      `SELECT * FROM bookings ORDER BY start_hour ASC`
-    )
-    .all() as BookingRow[];
-  return rows.map(rowToBooking);
-}
-
-export function getSubscriberByEmail(email: string): Subscriber | undefined {
-  const conn = db();
-  const u = conn.prepare("SELECT id FROM users WHERE email = ?").get(email) as { id: string } | undefined;
-  if (u) {
-    const r = conn
-      .prepare("SELECT * FROM subscribers WHERE user_id = ? ORDER BY id DESC LIMIT 1")
-      .get(u.id) as SubscriberRow | undefined;
-    if (r) return rowToSubscriber(r);
-  }
-  // Fallback: procurar pelo campo `name` (caso o subscriber não tenha user_id)
-  const fallback = conn
-    .prepare("SELECT * FROM subscribers WHERE name = ? ORDER BY id DESC LIMIT 1")
-    .get(email) as SubscriberRow | undefined;
-  return fallback ? rowToSubscriber(fallback) : undefined;
-}
-
-export function listAllSubscribers(): Subscriber[] {
-  return (db().prepare("SELECT * FROM subscribers ORDER BY id ASC").all() as SubscriberRow[]).map(
-    rowToSubscriber
-  );
-}
-
-export function findUserByEmail(email: string): UserRow | undefined {
-  return db().prepare("SELECT * FROM users WHERE email = ?").get(email) as UserRow | undefined;
-}
-
-export function verifyPassword(email: string, password: string): UserRow | null {
-  const u = findUserByEmail(email);
-  if (!u) return null;
-  if (!bcrypt.compareSync(password, u.password_hash)) return null;
-  return u;
-}
-
-// ---------------------------------------------------------------- writes
-
-const createBookingSchema = z.object({
-  userId: z.string().min(1),
-  connectorId: z.string().min(1),
-  plan: z.enum(["noturno", "pro"]),
-  startHour: z.number().min(0).max(24),
-  durationMin: z.number().int().positive().max(24 * 60),
-});
-export type CreateBookingInput = z.infer<typeof createBookingSchema>;
-
-export function createBooking(input: CreateBookingInput): Booking {
-  const data = createBookingSchema.parse(input);
-  const conn = db();
-
-  const end = data.startHour + data.durationMin / 60;
-  const existing = conn
-    .prepare(
-      `SELECT id FROM bookings
-       WHERE connector_id = ?
-         AND status IN ('confirmed','pending','in_use')
-         AND NOT (start_hour + (duration_min / 60.0) <= ? OR start_hour >= ?)`
-    )
-    .all(data.connectorId, data.startHour, end) as { id: string }[];
-  if (existing.length > 0) {
-    throw new Error(`connector_busy:${data.connectorId}`);
-  }
-
-  const id = `b-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-  // descobrir point_id via connector
-  const pidRow = conn.prepare("SELECT point_id FROM connectors WHERE id = ?").get(data.connectorId) as { point_id: string } | undefined;
-  if (!pidRow) throw new Error(`connector_not_found:${data.connectorId}`);
-  conn
-    .prepare(
-      `INSERT INTO bookings (id, user_id, connector_id, point_id, plan, start_hour, duration_min, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'confirmed')`
-    )
-    .run(id, data.userId, data.connectorId, pidRow.point_id, data.plan, data.startHour, data.durationMin);
-
-  conn.prepare("UPDATE connectors SET status = 'reserved' WHERE id = ?").run(data.connectorId);
-
-  const row = conn.prepare("SELECT * FROM bookings WHERE id = ?").get(id) as BookingRow;
-  return rowToBooking(row);
-}
-
-export function cancelBooking(id: string): Booking | undefined {
-  const conn = db();
-  const row = conn.prepare("SELECT * FROM bookings WHERE id = ?").get(id) as BookingRow | undefined;
-  if (!row) return undefined;
-  conn.prepare("UPDATE bookings SET status = 'cancelled' WHERE id = ?").run(id);
-  const remaining = conn
-    .prepare(
-      `SELECT COUNT(*) AS n FROM bookings
-       WHERE connector_id = ? AND status IN ('confirmed','pending','in_use')`
-    )
-    .get(row.connector_id) as { n: number };
-  if (remaining.n === 0) {
-    conn.prepare("UPDATE connectors SET status = 'free' WHERE id = ?").run(row.connector_id);
-  }
-  const updated = conn.prepare("SELECT * FROM bookings WHERE id = ?").get(id) as BookingRow;
-  return rowToBooking(updated);
-}
-
-export function updateBookingStatus(id: string, status: Booking["status"]): Booking | undefined {
-  const conn = db();
-  const row = conn.prepare("SELECT * FROM bookings WHERE id = ?").get(id) as BookingRow | undefined;
-  if (!row) return undefined;
-  conn.prepare("UPDATE bookings SET status = ? WHERE id = ?").run(status, id);
-  // sincroniza connector: cancelled/no_show/done → free, confirmed/pending → reserved
-  const connState: PointStatus =
-    status === "confirmed" || status === "pending" ? "reserved" : "free";
-  conn.prepare("UPDATE connectors SET status = ? WHERE id = ?").run(connState, row.connector_id);
-  const updated = conn.prepare("SELECT * FROM bookings WHERE id = ?").get(id) as BookingRow;
-  return rowToBooking(updated);
-}
-
-export function incrementSubscriptionKwh(subId: number, kwh: number): number {
-  const conn = db();
-  conn.prepare("UPDATE subscriptions SET kwh_used = kwh_used + ? WHERE id = ?").run(kwh, subId);
-  const row = conn.prepare("SELECT kwh_used FROM subscriptions WHERE id = ?").get(subId) as
-    | { kwh_used: number }
-    | undefined;
-  return row?.kwh_used ?? 0;
-}
-
-export function updateSubscriberStatus(id: number, status: Subscriber["status"]): Subscriber | undefined {
-  const conn = db();
-  const row = conn.prepare("SELECT * FROM subscribers WHERE id = ?").get(id) as SubscriberRow | undefined;
-  if (!row) return undefined;
-  conn.prepare("UPDATE subscribers SET status = ? WHERE id = ?").run(status, id);
-  const updated = conn.prepare("SELECT * FROM subscribers WHERE id = ?").get(id) as SubscriberRow;
-  return rowToSubscriber(updated);
-}
-/**
- * ---------------------------------------------------------------- Compat layer
- * Aliases e funções extras que outras partes do app esperam. Mantém o db.ts
- * como fonte de verdade.
- */
 
 export type Charge = {
   id: string;
@@ -588,59 +88,137 @@ export type Profile = {
   vehicle: string;
 };
 
-export function listAllUsers(): UserRow[] {
-  return db().prepare("SELECT * FROM users ORDER BY role, name").all() as UserRow[];
-}
+// Re-exports para tipos públicos
+export type { Point, Connector, Booking, Subscriber, Subscription, DayPoint } from "@/lib/mock-data";
 
-export function findUserById(id: string): UserRow | undefined {
-  return db().prepare("SELECT * FROM users WHERE id = ?").get(id) as UserRow | undefined;
-}
-
-/** Profile = user + plate/car_model. Retorna undefined se nao existe. */
-export function getProfile(userId: string): Profile | undefined {
-  const u = findUserById(userId);
-  if (!u) return undefined;
-  return {
-    id: u.id,
-    email: u.email,
-    name: u.name,
-    role: u.role,
-    plate: u.plate ?? "",
-    vehicle: u.car_model ?? "",
-  };
-}
-
-export function updateProfile(
-  userId: string,
-  patch: { name?: string; plate?: string; vehicle?: string },
-): Profile | undefined {
-  const conn = db();
-  const u = findUserById(userId);
-  if (!u) return undefined;
-  if (typeof patch.name === "string") {
-    conn.prepare("UPDATE users SET name = ? WHERE id = ?").run(patch.name, userId);
+// ----- init -----
+export async function initSeed(): Promise<void> {
+  if (HAS_PG) {
+    await pg().initSchema();
+    await pg().seedIfEmpty();
+  } else {
+    sqlite().initSeed();
   }
-  if (typeof patch.plate === "string") {
-    conn.prepare("UPDATE users SET plate = ? WHERE id = ?").run(patch.plate.toUpperCase(), userId);
-  }
-  if (typeof patch.vehicle === "string") {
-    conn.prepare("UPDATE users SET car_model = ? WHERE id = ?").run(patch.vehicle, userId);
-  }
-  return getProfile(userId);
 }
 
-export function getBooking(id: string): Booking | undefined {
-  const row = db().prepare("SELECT * FROM bookings WHERE id = ?").get(id) as BookingRow | undefined;
-  return row ? rowToBooking(row) : undefined;
+// ----- reads -----
+export async function listPoints() {
+  return HAS_PG ? pg().listPoints() : Promise.resolve(sqlite().listPoints());
+}
+export async function listConnectors() {
+  return HAS_PG ? pg().listConnectors() : Promise.resolve(sqlite().listConnectors());
+}
+export async function listBookingsForDay(date: string) {
+  return HAS_PG ? pg().listBookingsForDay(date) : Promise.resolve(sqlite().listBookingsForDay(date));
+}
+export async function getSubscriberByEmail(email: string) {
+  return HAS_PG ? pg().getSubscriberByEmail(email) : Promise.resolve(sqlite().getSubscriberByEmail(email));
+}
+export async function listAllSubscribers() {
+  return HAS_PG ? pg().listAllSubscribers() : Promise.resolve(sqlite().listAllSubscribers());
+}
+export async function listAllUsers() {
+  return HAS_PG ? pg().listAllUsers() : Promise.resolve(sqlite().listAllUsers());
+}
+export async function findUserByEmail(email: string) {
+  return HAS_PG ? pg().findUserByEmail(email) : Promise.resolve(sqlite().findUserByEmail(email));
+}
+export async function findUserById(id: string) {
+  return HAS_PG ? pg().findUserById(id) : Promise.resolve(sqlite().findUserById(id));
+}
+export async function verifyPassword(email: string, password: string) {
+  return HAS_PG ? pg().verifyPassword(email, password) : Promise.resolve(sqlite().verifyPassword(email, password));
+}
+export async function getProfile(userId: string) {
+  return HAS_PG ? pg().getProfile(userId) : Promise.resolve(sqlite().getProfile(userId));
+}
+export async function updateProfile(userId: string, patch: { name?: string; plate?: string; vehicle?: string }) {
+  return HAS_PG ? pg().updateProfile(userId, patch) : sqlite().updateProfile(userId, patch);
+}
+export async function getBooking(id: string) {
+  return HAS_PG ? pg().getBooking(id) : Promise.resolve(sqlite().getBooking(id));
+}
+export async function getPoint(id: string) {
+  return HAS_PG ? pg().getPoint(id) : Promise.resolve(sqlite().getPoint(id));
+}
+export async function listBookingsForUser(userId: string) {
+  return HAS_PG ? pg().listBookingsForUser(userId) : Promise.resolve(sqlite().listBookingsForUser(userId));
+}
+export async function listChargesForUser(userId: string) {
+  return HAS_PG ? pg().listChargesForUser(userId) : Promise.resolve(sqlite().listChargesForUser(userId));
+}
+export async function getCharge(bookingId: string) {
+  return HAS_PG ? pg().getCharge(bookingId) : Promise.resolve(sqlite().getCharge(bookingId));
 }
 
-export function getPoint(id: string): Point | undefined {
-  return listPoints().find((p) => p.id === id);
+// ----- writes -----
+export async function createBooking(input: {
+  userId: string;
+  connectorId: string;
+  plan: "noturno" | "pro";
+  startHour: number;
+  durationMin: number;
+}) {
+  return HAS_PG ? pg().createBooking(input) : sqlite().createBooking(input);
+}
+export async function cancelBooking(id: string) {
+  return HAS_PG ? pg().cancelBooking(id) : sqlite().cancelBooking(id);
+}
+export async function updateBookingStatus(id: string, status: Booking["status"]) {
+  return HAS_PG ? pg().updateBookingStatus(id, status) : sqlite().updateBookingStatus(id, status);
+}
+export async function incrementSubscriptionKwh(subId: number, kwh: number) {
+  return HAS_PG ? pg().incrementSubscriptionKwh(subId, kwh) : sqlite().incrementSubscriptionKwh(subId, kwh);
+}
+export async function updateSubscriberStatus(id: number, status: Subscriber["status"]) {
+  return HAS_PG ? pg().updateSubscriberStatus(id, status) : sqlite().updateSubscriberStatus(id, status);
+}
+export async function updateSubscriberStatusByName(name: string, status: Subscriber["status"]) {
+  return HAS_PG ? pg().updateSubscriberStatusByName(name, status) : sqlite().updateSubscriberStatusByName(name, status);
+}
+export async function incrementKwhByName(name: string, delta: number) {
+  return HAS_PG ? pg().incrementKwhByName(name, delta) : sqlite().incrementKwhByName(name, delta);
+}
+export async function updateConnectorStatus(connectorId: string, status: Connector["status"]) {
+  return HAS_PG ? pg().updateConnectorStatus(connectorId, status) : sqlite().updateConnectorStatus(connectorId, status);
+}
+export async function createPoint(input: {
+  name: string;
+  neighborhood: string;
+  lat: number;
+  lon: number;
+  kind: Connector["kind"];
+  powerKw: number;
+  partner: string;
+}) {
+  return HAS_PG ? pg().createPoint(input) : sqlite().createPoint(input);
+}
+export async function getSetting(key: string) {
+  return HAS_PG ? pg().getSetting(key) : Promise.resolve(sqlite().getSetting(key));
+}
+export async function getSettingNumber(key: string) {
+  return HAS_PG ? pg().getSettingNumber(key) : Promise.resolve(sqlite().getSettingNumber(key));
+}
+export async function setSetting(key: string, value: string | number) {
+  return HAS_PG ? pg().setSetting(key, value) : sqlite().setSetting(key, value);
+}
+export async function startCharge(input: { userId: string; bookingId: string }) {
+  return HAS_PG ? pg().startCharge(input) : sqlite().startCharge(input);
+}
+export async function createReservation(input: {
+  userId: string;
+  pointId: string;
+  connectorId: string;
+  planId: "noturno" | "pro";
+  start: number;
+  durationMin: number;
+}) {
+  return HAS_PG ? pg().createReservation(input) : sqlite().createReservation(input);
 }
 
-/** Lê o userId do cookie de sessão via headers (NextRequest ou Headers).
- *  Retorna string vazia se o cookie nao estiver presente (rotas tratam isso
- *  como 401 antes de chamar funções do banco). */
+
+
+// ----- headers util (sync, nao passa pelo banco) -----
 export function getUserIdFromHeaders(headers: Headers): string {
   const cookieHeader = headers.get("cookie") ?? "";
   const raw = (headers as Headers).get?.("cookie") ?? cookieHeader;
@@ -659,203 +237,5 @@ export function getUserIdFromHeaders(headers: Headers): string {
     return "";
   }
 }
-
-export function listBookingsForUser(userId: string): Booking[] {
-  const rows = db()
-    .prepare("SELECT * FROM bookings WHERE user_id = ? ORDER BY start_hour ASC")
-    .all(userId) as BookingRow[];
-  return rows.map(rowToBooking);
-}
-
-export function listChargesForUser(userId: string): Charge[] {
-  const rows = db()
-    .prepare(
-      `SELECT c.*, b.point_id as booking_point_id
-       FROM charges c
-       LEFT JOIN bookings b ON c.booking_id = b.id
-       WHERE c.user_id = ?
-       ORDER BY c.started_at DESC`
-    )
-    .all(userId) as Array<{
-      id: string;
-      booking_id: string;
-      user_id: string | null;
-      connector_id: string;
-      started_at: string;
-      ended_at: string | null;
-      kwh: number;
-      amount_brl: number;
-      booking_point_id: string | null;
-    }>;
-  return rows.map((r) => ({
-    id: r.id,
-    bookingId: r.booking_id,
-    userId: r.user_id,
-    connectorId: r.connector_id,
-    pointId: r.booking_point_id ?? "",
-    startedAt: r.started_at,
-    endedAt: r.ended_at,
-    kwh: r.kwh,
-    amount: r.amount_brl,
-  }));
-}
-
-export function getCharge(bookingId: string): Charge | undefined {
-  const r = db()
-    .prepare(
-      `SELECT c.*, b.point_id as booking_point_id
-       FROM charges c LEFT JOIN bookings b ON c.booking_id = b.id
-       WHERE c.booking_id = ? AND c.ended_at IS NULL
-       ORDER BY c.started_at DESC LIMIT 1`
-    )
-    .get(bookingId) as
-    | {
-        id: string;
-        booking_id: string;
-        user_id: string | null;
-        connector_id: string;
-        started_at: string;
-        ended_at: string | null;
-        kwh: number;
-        amount_brl: number;
-        booking_point_id: string | null;
-      }
-    | undefined;
-  if (!r) return undefined;
-  return {
-    id: r.id,
-    bookingId: r.booking_id,
-    userId: r.user_id,
-    connectorId: r.connector_id,
-    pointId: r.booking_point_id ?? "",
-    startedAt: r.started_at,
-    endedAt: r.ended_at,
-    kwh: r.kwh,
-    amount: r.amount_brl,
-  };
-}
-
-/** Inicia uma carga. Atualiza booking -> 'in_progress', connector -> 'in_use',
- *  cria um registro em charges com started_at = agora. */
-export function startCharge(input: { userId: string; bookingId: string }): {
-  ok: true;
-  booking: Booking;
-  charge: Charge;
-} | { ok: false; error: string } {
-  const conn = db();
-  const row = conn.prepare("SELECT * FROM bookings WHERE id = ?").get(input.bookingId) as
-    | BookingRow
-    | undefined;
-  if (!row) return { ok: false, error: "Reserva não encontrada." };
-  if (row.user_id && row.user_id !== input.userId) {
-    return { ok: false, error: "Esta reserva não pertence a você." };
-  }
-  // marca a reserva como in_progress (status custom via texto plano — o schema
-  // atual nao tem 'in_progress' mas usamos para a tela)
-  conn.prepare("UPDATE bookings SET status = 'pending' WHERE id = ?").run(input.bookingId);
-  conn.prepare("UPDATE connectors SET status = 'in_use' WHERE id = ?").run(row.connector_id);
-  const chargeId = `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-  const startedAt = new Date().toISOString();
-  conn.prepare(
-    `INSERT INTO charges (id, booking_id, user_id, connector_id, started_at, ended_at, kwh, amount_brl)
-     VALUES (?, ?, ?, ?, ?, NULL, 0, 0)`,
-  ).run(chargeId, input.bookingId, input.userId, row.connector_id, startedAt);
-  const booking = getBooking(input.bookingId)!;
-  const charge = getCharge(input.bookingId)!;
-  return { ok: true, booking, charge };
-}
-
-/** Cria uma reserva a partir de pointId/connectorId/plan/start. */
-export function createReservation(input: {
-  userId: string;
-  pointId: string;
-  connectorId: string;
-  planId: PlanId;
-  start: number;
-  durationMin: number;
-}): Booking {
-  return createBooking({
-    userId: input.userId,
-    connectorId: input.connectorId,
-    plan: input.planId,
-    startHour: input.start,
-    durationMin: input.durationMin,
-  });
-}
-/** Atualiza só o status de um conector. */
-export function updateConnectorStatus(connectorId: string, status: PointStatus): boolean {
-  const conn = db();
-  const r = conn.prepare("UPDATE connectors SET status = ? WHERE id = ?").run(status, connectorId);
-  return r.changes > 0;
-}
-
-/** Localiza o assinante pelo NOME (que o painel dos donos usa) e atualiza. */
-export function updateSubscriberStatusByName(name: string, status: Subscriber["status"]): Subscriber | null {
-  const conn = db();
-  const row = conn.prepare("SELECT * FROM subscribers WHERE name = ?").get(name) as SubscriberRow | undefined;
-  if (!row) return null;
-  conn.prepare("UPDATE subscribers SET status = ? WHERE id = ?").run(status, row.id);
-  const updated = conn.prepare("SELECT * FROM subscribers WHERE id = ?").get(row.id) as SubscriberRow;
-  return rowToSubscriber(updated);
-}
-
-/** Soma kwh30d do assinante por nome. */
-export function incrementKwhByName(name: string, delta: number): Subscriber | null {
-  const conn = db();
-  const row = conn.prepare("SELECT * FROM subscribers WHERE name = ?").get(name) as SubscriberRow | undefined;
-  if (!row) return null;
-  const next = Math.max(0, Math.round(row.kwh30d + delta));
-  conn.prepare("UPDATE subscribers SET kwh30d = ? WHERE id = ?").run(next, row.id);
-  const updated = conn.prepare("SELECT * FROM subscribers WHERE id = ?").get(row.id) as SubscriberRow;
-  return rowToSubscriber(updated);
-}
-
-/** Cria um ponto novo (usado pelo painel dos donos). */
-export function createPoint(input: {
-  name: string;
-  neighborhood: string;
-  lat: number;
-  lon: number;
-  kind: ChargerKind;
-  powerKw: number;
-  partner: string;
-}): Point {
-  const conn = db();
-  const id = `hub-${Date.now().toString(36)}`;
-  const connectorId = `${id}-c1`;
-  conn
-    .prepare(
-      `INSERT INTO points (id, name, neighborhood, focus, address, lat, lon, open_hours, partner)
-       VALUES (?, ?, ?, 'motoristas', ?, ?, ?, '24 horas', ?)`,
-    )
-    .run(id, input.name, input.neighborhood, input.neighborhood, input.lat, input.lon, input.partner);
-  conn
-    .prepare(
-      `INSERT INTO connectors (id, point_id, kind, power_kw, status) VALUES (?, ?, ?, ?, 'free')`,
-    )
-    .run(connectorId, id, input.kind, input.powerKw);
-  return listPoints().find((p) => p.id === id)!;
-}
-
-/** Lê uma configuração global. */
-export function getSetting(key: string): string | null {
-  const r = db().prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
-  return r?.value ?? null;
-}
-
-/** Lê uma configuração global e converte pra número. */
-export function getSettingNumber(key: string): number | null {
-  const v = getSetting(key);
-  if (v == null) return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
-/** Define uma configuração global. */
-export function setSetting(key: string, value: string | number): void {
-  db()
-    .prepare(
-      "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-    )
-    .run(key, String(value));
-}
+// Re-import dos tipos para que o resto do app continue funcionando
+import type { Booking, Subscriber, Connector, Point } from "@/lib/mock-data";

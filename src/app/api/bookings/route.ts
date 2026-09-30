@@ -11,8 +11,8 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const userId = getUserIdFromHeaders(request.headers);
   if (!userId) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-  const bookings = listBookingsForUser(userId);
-  const charges = listChargesForUser(userId);
+  const bookings = await listBookingsForUser(userId);
+  const charges = await listChargesForUser(userId);
   return NextResponse.json({ bookings, charges });
 }
 
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
   if (!pointId || !connectorId || !Number.isFinite(start) || !Number.isFinite(durationMin)) {
     return NextResponse.json({ error: "Campos obrigatórios ausentes" }, { status: 400 });
   }
-  const booking = createBooking({
+  const booking = await createBooking({
     userId,
     connectorId,
     plan: planId as "noturno" | "pro",
