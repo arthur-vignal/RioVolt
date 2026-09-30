@@ -30,6 +30,7 @@ import {
 // ---------------------------------------------------------------- singleton
 
 let _pool: Pool | null = null;
+let _schemaReady: Promise<void> | null = null;
 
 function getPool(): Pool {
   if (_pool) return _pool;
@@ -41,6 +42,28 @@ function getPool(): Pool {
     max: 10,
   });
   return _pool;
+}
+
+/**
+ * Garante que o schema existe E a migration de emails está aplicada.
+ * Lazy + idempotente + thread-safe.
+ * Não roda seed (já é responsabilidade do seedIfEmpty).
+ */
+export function ensureSchema(): Promise<void> {
+  if (_schemaReady) return _schemaReady;
+  _schemaReady = (async () => {
+    try {
+      await initSchema();
+      // migration idempotente: renameia emails .local → .app se existirem
+      await getPool().query(
+        "UPDATE users SET email = REPLACE(email, '@voltrio.local', '@voltrio.app') WHERE email LIKE '%@voltrio.local'",
+      );
+    } catch (err) {
+      _schemaReady = null;
+      throw err;
+    }
+  })();
+  return _schemaReady;
 }
 
 // ---------------------------------------------------------------- schema
@@ -386,6 +409,7 @@ export async function listBookingsForDay(_date: string): Promise<Booking[]> {
 }
 
 export async function getSubscriberByEmail(email: string): Promise<Subscriber | undefined> {
+  await ensureSchema();
   const pool = getPool();
   // primeiro tenta pelo user_id (email -> users -> subscribers)
   const u = await pool.query<{ id: string }>(
