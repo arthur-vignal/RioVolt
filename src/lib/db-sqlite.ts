@@ -38,8 +38,6 @@ import { z } from "zod";
 
 import {
   POINTS,
-  SUBSCRIBERS,
-  BOOKINGS,
   ME,
   type Point,
   type Connector,
@@ -226,44 +224,18 @@ function seed(conn: Database.Database) {
       }
     }
 
-    // 3. subscriptions (assinatura ativa pro motorista 1, ancorada no ME)
+    // 3. subscriptions — assinatura ativa pro user-1 (Mariana), zerada.
+    //    Sem kwh_used placeholder; consumo sobe com charges reais.
     conn
       .prepare(
         `INSERT INTO subscriptions (user_id, plan, kwh_used, monthly_fee, since, next_renewal, payment_ok)
          VALUES (?, ?, ?, ?, ?, ?, ?)`
       )
-      .run("user-1", ME.planId, ME.kwhUsed, ME.monthlyFee, ME.since, ME.nextRenewal, ME.paymentOk ? 1 : 0);
+      .run("user-1", ME.planId, 0, ME.monthlyFee, ME.since, ME.nextRenewal, ME.paymentOk ? 1 : 0);
 
-    // 4. subscribers (lista do painel)
-    const insertSubs = conn.prepare(
-      `INSERT INTO subscribers (user_id, name, plan, status, since, kwh30d, monthly_fee)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    );
-    for (const sub of SUBSCRIBERS) {
-      const linkedUser =
-        sub.name === "Bruno Tavares" ? "owner-1"
-        : sub.name === "Mariana Souza" ? "user-1"
-        : sub.name === "Rafael Mendes" ? "user-2"
-        : sub.name === "Carlos Andrade" ? "user-3"
-        : null;
-      insertSubs.run(linkedUser, sub.name, sub.planId, sub.status, sub.since, sub.kwh30d, sub.monthlyFee);
-    }
+    // 4. subscribers — sem placeholder. Tabela fica vazia ate alguem assinar.
 
-    // 5. bookings (seed inicial a partir do BOOKINGS mock)
-    const insertBooking = conn.prepare(
-      `INSERT INTO bookings (id, user_id, connector_id, point_id, plan, start_hour, duration_min, status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
-    );
-    // resolve point_id a partir do connector
-    const pointIdByConnector = new Map<string, string>();
-    for (const row of conn.prepare("SELECT id, point_id FROM connectors").all() as Array<{ id: string; point_id: string }>) {
-      pointIdByConnector.set(row.id, row.point_id);
-    }
-    for (const b of BOOKINGS) {
-      const pid = pointIdByConnector.get(b.connectorId);
-      if (!pid) continue;
-      insertBooking.run(b.id, null, b.connectorId, pid, b.planId, b.start, b.durationMin, b.status);
-    }
+    // 5. bookings — sem seed. Agendamentos entram via fluxo real do usuario.
   });
   tx();
 }
@@ -552,6 +524,71 @@ export function incrementSubscriptionKwh(subId: number, kwh: number): number {
     | { kwh_used: number }
     | undefined;
   return row?.kwh_used ?? 0;
+}
+
+export type SubscriptionRow = {
+  id: number;
+  userId: string;
+  plan: PlanId;
+  kwhUsed: number;
+  monthlyFee: number;
+  since: string;
+  nextRenewal: string;
+  paymentOk: boolean;
+};
+
+function rowToSubscription(r: SubscriptionTableRow): SubscriptionRow {
+  return {
+    id: r.id,
+    userId: r.user_id,
+    plan: r.plan as PlanId,
+    kwhUsed: Number(r.kwh_used),
+    monthlyFee: Number(r.monthly_fee),
+    since: r.since,
+    nextRenewal: r.next_renewal,
+    paymentOk: !!r.payment_ok,
+  };
+}
+
+type SubscriptionTableRow = {
+  id: number;
+  user_id: string;
+  plan: string;
+  kwh_used: number;
+  monthly_fee: number;
+  since: string;
+  next_renewal: string;
+  payment_ok: number;
+};
+
+export function getSubscriptionByUserId(userId: string): SubscriptionRow | null {
+  const conn = db();
+  const row = conn
+    .prepare(
+      `SELECT id, user_id, plan, kwh_used, monthly_fee, since, next_renewal, payment_ok
+       FROM subscriptions WHERE user_id = ? ORDER BY id DESC LIMIT 1`,
+    )
+    .get(userId) as SubscriptionTableRow | undefined;
+  return row ? rowToSubscription(row) : null;
+}
+
+export type DailyKwh = { day: string; kwh: number; revenue: number };
+
+export function getDailyKwhLast30Days(): DailyKwh[] {
+  const conn = db();
+  // SQLite nao tem date_trunc nativo. agrupa por dia local.
+  // Pega ultimos 30 dias a partir de agora.
+  const rows = conn
+    .prepare(
+      `SELECT strftime('%d', started_at, 'localtime') AS day,
+              COALESCE(SUM(kwh), 0) AS kwh,
+              COALESCE(SUM(amount), 0) AS revenue
+       FROM charges
+       WHERE started_at >= datetime('now', '-30 days')
+       GROUP BY day ORDER BY day`,
+    )
+    .all() as Array<{ day: string; kwh: number; revenue: number }>;
+  return rows.map((r) => ({ day: r.day, kwh: Number(r.kwh), revenue: Number(r.revenue) }));
 }
 
 export function updateSubscriberStatus(id: number, status: Subscriber["status"]): Subscriber | undefined {

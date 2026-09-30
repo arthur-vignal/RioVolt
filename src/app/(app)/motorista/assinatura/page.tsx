@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Shell } from "@/app/(app)/layout-client";
-import { PLANS, PLAN_BY_ID, ME, type PlanId } from "@/lib/mock-data";
+import { PLANS, PLAN_BY_ID, type PlanId } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -18,13 +18,21 @@ import {
 
 const brl = (n: number) => `R$ ${n.toFixed(2).replace(".", ",")}`;
 
+type SubscriptionDTO = {
+  id: number;
+  planId: PlanId;
+  kwhUsed: number;
+  monthlyFee: number;
+  since: string;
+  nextRenewal: string;
+  paymentOk: boolean;
+};
+
 function PlanCard({
   id,
-  onPick,
   current,
 }: {
   id: PlanId;
-  onPick: (id: PlanId) => void;
   current: PlanId;
 }) {
   const p = PLAN_BY_ID[id];
@@ -54,7 +62,7 @@ function PlanCard({
           </div>
         </div>
         {isCurrent && (
-          <span className="rounded-[6px] border border-[#16a34a]/30 bg-[#16a34a]/10 px-2.5 py-1 text-[10px] font-medium #16a34a">
+          <span className="rounded-[6px] border border-[#16a34a]/30 bg-[#16a34a]/10 px-2.5 py-1 text-[10px] font-medium text-[#16a34a]">
             Seu plano
           </span>
         )}
@@ -69,21 +77,21 @@ function PlanCard({
         <span className="text-[12px] text-black/60">/mês</span>
       </div>
 
-      <div className="mt-3 space-y-1.5 rounded-[6px] border border-black/10 #f7f8f6/40 p-3 text-[12px]">
+      <div className="mt-3 space-y-1.5 rounded-[6px] border border-black/10 bg-[#f7f8f6]/40 p-3 text-[12px]">
         <div className="flex justify-between">
-          <span className="#000000/70">Franquia</span>
+          <span className="text-black/70">Franquia</span>
           <span className="tabular-nums font-medium">{p.includedKwh} kWh</span>
         </div>
         <div className="flex justify-between">
-          <span className="#000000/70">Excedente</span>
+          <span className="text-black/70">Excedente</span>
           <span className="tabular-nums font-medium">{brl(p.overageRate)}/kWh</span>
         </div>
         <div className="flex justify-between">
-          <span className="#000000/70">Janela</span>
+          <span className="text-black/70">Janela</span>
           <span className="font-medium">{p.window}</span>
         </div>
         <div className="flex justify-between">
-          <span className="#000000/70">Conector</span>
+          <span className="text-black/70">Conector</span>
           <span className="font-medium">
             {p.connectorKind} {p.connectorKind === "DC" ? "30–60 kW" : "7–22 kW"}
           </span>
@@ -93,49 +101,82 @@ function PlanCard({
       <ul className="mt-4 space-y-2">
         {p.perks.map((perk) => (
           <li key={perk} className="flex items-start gap-2 text-[12px] text-black/85">
-            <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 #16a34a" />
+            <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#16a34a]" />
             {perk}
           </li>
         ))}
       </ul>
-
-      <button
-        type="button"
-        onClick={() => onPick(p.id)}
-        disabled={isCurrent}
-        className={cn(
-          "mt-5 inline-flex h-9 w-full items-center justify-center gap-2 rounded-[6px] text-[13px] font-medium transition-colors",
-          isCurrent
-            ? "cursor-default border border-black/10 text-black/60"
-            : "border border-[#16a34a]/30 bg-[#16a34a]/10 #16a34a hover:bg-[#16a34a]/15",
-        )}
-      >
-        {isCurrent ? "Plano atual" : "Mudar para este plano"}
-        {!isCurrent && <ArrowRight className="h-3.5 w-3.5" />}
-      </button>
     </div>
   );
 }
 
 export default function AssinaturaPage() {
-  const [plan, setPlan] = useState<PlanId>(ME.planId);
-  const [kwh, setKwh] = useState(ME.kwhUsed);
-  const current = PLAN_BY_ID[plan];
+  const [sub, setSub] = useState<SubscriptionDTO | null | "loading">("loading");
+  const [kwh, setKwh] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/me/subscription", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data: { ok: boolean; subscription: SubscriptionDTO | null }) => {
+        if (cancelled) return;
+        const s = data.subscription;
+        setSub(s);
+        setKwh(s?.kwhUsed ?? 0);
+      })
+      .catch(() => {
+        if (!cancelled) setSub(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Estado: sem assinatura ativa
+  if (sub === "loading") {
+    return (
+      <Shell scope="motorista">
+        <div className="mx-auto max-w-[1200px]">
+          <div className="text-[13px] text-black/60">Carregando assinatura…</div>
+        </div>
+      </Shell>
+    );
+  }
+
+  if (!sub) {
+    return (
+      <Shell scope="motorista">
+        <div className="mx-auto max-w-[1200px]">
+          <h1 className="text-2xl font-semibold tracking-tight">Assinatura</h1>
+          <p className="mt-1 text-[13px] text-black/70">
+            Você ainda não tem um plano ativo.
+          </p>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            {PLANS.map((p) => (
+              <PlanCard key={p.id} id={p.id} current="noturno" />
+            ))}
+          </div>
+        </div>
+      </Shell>
+    );
+  }
+
+  const current = PLAN_BY_ID[sub.planId];
   const over = Math.max(0, kwh - (current.includedKwh ?? 0));
-  const pct = Math.min(100, Math.round((kwh / (current.includedKwh ?? 1)) * 100));
-  const saved = Math.round(over * (2.49 - current.overageRate) * 100) / 100;
+  const pct = Math.min(
+    100,
+    Math.round((kwh / (current.includedKwh ?? 1)) * 100),
+  );
 
   return (
     <Shell scope="motorista">
       <div className="mx-auto max-w-[1200px]">
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight">Assinatura</h1>
-          <p className="mt-1 text-[13px] text-black/70">
-            Plano {current.name} desde {ME.since} · próxima cobrança em {ME.nextRenewal}
-          </p>
-        </div>
+        <h1 className="text-2xl font-semibold tracking-tight">Assinatura</h1>
+        <p className="mt-1 text-[13px] text-black/70">
+          Plano {current.name} desde {sub.since} · próxima cobrança em {sub.nextRenewal}
+        </p>
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+        <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
           <div className="flex flex-col gap-4">
             <section className="ev-card rounded-[6px] border border-black/10 p-5">
               <div className="flex items-start justify-between">
@@ -179,17 +220,17 @@ export default function AssinaturaPage() {
 
               <div className="mt-4 grid grid-cols-2 gap-3 border-t border-black/10 pt-4 text-[12px]">
                 <div>
-                  <p className="#000000/70">Mensalidade</p>
+                  <p className="text-black/70">Mensalidade</p>
                   <p className="mt-0.5 text-[15px] font-semibold tabular-nums">
                     {brl(current.monthlyFee)}
                   </p>
                 </div>
                 <div>
-                  <p className="#000000/70">Excedente</p>
+                  <p className="text-black/70">Excedente</p>
                   <p
                     className={cn(
                       "mt-0.5 text-[15px] font-semibold tabular-nums",
-                      over > 0 ? "text-busy" : "#000000/40",
+                      over > 0 ? "text-busy" : "text-black/40",
                     )}
                   >
                     {over > 0 ? brl(over * current.overageRate) : "—"}
@@ -203,28 +244,31 @@ export default function AssinaturaPage() {
                 <Wallet className="h-4 w-4 text-taken" />
                 <h2 className="text-[13px] font-semibold">Forma de pagamento</h2>
               </div>
-              <div className="mt-3 flex items-center justify-between rounded-[6px] border border-black/10 #f7f8f6/40 p-3">
+              <div className="mt-3 flex items-center justify-between rounded-[6px] border border-black/10 bg-[#f7f8f6]/40 p-3">
                 <div>
                   <p className="text-[13px] font-medium">Cartão de crédito •••• 4242</p>
                   <p className="text-[11px] text-black/70">
                     Cobrança automática recorrente
                   </p>
                 </div>
-                <span className="rounded-[6px] border border-[#16a34a]/30 bg-[#16a34a]/10 px-2 py-1 text-[10px] font-medium #16a34a">
-                  Pago
+                <span
+                  className={cn(
+                    "rounded-[6px] border px-2 py-1 text-[10px] font-medium",
+                    sub.paymentOk
+                      ? "border-[#16a34a]/30 bg-[#16a34a]/10 text-[#16a34a]"
+                      : "border-busy/30 bg-busy/10 text-busy",
+                  )}
+                >
+                  {sub.paymentOk ? "Pago" : "Pendente"}
                 </span>
               </div>
-              <p className="mt-2.5 text-[11px] text-black/60">
-                Gateway recorrente: Pix recorrente também disponível (R$ 0,99 a R$ 1,99 por
-                transação, contra 2,8% a 3,9% no cartão).
-              </p>
             </section>
           </div>
 
           <div className="flex flex-col gap-4">
             <div className="grid gap-4 sm:grid-cols-2">
               {PLANS.map((p) => (
-                <PlanCard key={p.id} id={p.id} onPick={setPlan} current={plan} />
+                <PlanCard key={p.id} id={p.id} current={sub.planId} />
               ))}
             </div>
 
@@ -233,26 +277,13 @@ export default function AssinaturaPage() {
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-busy" />
                 <div className="text-[12px]">
                   <p className="font-medium text-black">
-                    Você está no {plan === "noturno" ? "Noturno Garantido" : "Pro Driver"}
+                    Você está no {sub.planId === "noturno" ? "Noturno Garantido" : "Pro Driver"}
                   </p>
                   <p className="mt-1 text-black/80">
-                    {plan === "noturno" ? (
-                      <>
-                        O excedente do seu plano sai a{" "}
-                        <span className="text-black">{brl(current.overageRate)}/kWh</span> —
-                        {" "}
-                        {saved > 0
-                          ? `você economiza ${brl(saved)} em relação ao plano Pro Driver no mesmo consumo.`
-                          : "42% mais barato que a tarifa avulsa de R$ 2,04/kWh."}
-                      </>
-                    ) : (
-                      <>
-                        No Pro Driver o excedente sai a{" "}
-                        <span className="text-black">{brl(current.overageRate)}/kWh</span>, com
-                        janela diurna e carregadores DC. Se carregar de madrugada perto de casa, o
-                        Noturno Garantido sai mais barato.
-                      </>
-                    )}
+                    Excedente a{" "}
+                    <span className="text-black">{brl(current.overageRate)}/kWh</span>{" "}
+                    acima da franquia de {current.includedKwh} kWh. Mudança de plano
+                    pode ser solicitada pelo suporte.
                   </p>
                 </div>
               </div>
@@ -260,7 +291,7 @@ export default function AssinaturaPage() {
 
             <Link
               href="/motorista/reservar"
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-[6px] border border-[#16a34a]/30 bg-[#16a34a]/10 text-[13px] font-medium #16a34a transition-colors hover:bg-[#16a34a]/15"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-[6px] border border-[#16a34a]/30 bg-[#16a34a]/10 text-[13px] font-medium text-[#16a34a] transition-colors hover:bg-[#16a34a]/15"
             >
               <TrendingUp className="h-4 w-4" />
               Reservar vaga com este plano

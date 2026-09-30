@@ -13,8 +13,6 @@
 import { Pool, type PoolClient, type QueryResultRow } from "pg";
 import {
   POINTS,
-  SUBSCRIBERS,
-  BOOKINGS,
   ME,
   type Point,
   type Connector,
@@ -216,24 +214,23 @@ export async function seedIfEmpty(): Promise<void> {
         );
       }
     }
+    // Subscription ativa pra Mariana (user-1), zerada.
+    // Plan: noturno, mensalidade R$349, franquia 200 kWh. Demais usuarios sem
+    // subscription ate assinarem.
     await tx.query(
       `INSERT INTO subscriptions (user_id,plan,kwh_used,monthly_fee,since,next_renewal,payment_ok)
        VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      ["user-1", ME.planId, ME.kwhUsed, ME.monthlyFee, ME.since, ME.nextRenewal, ME.paymentOk],
+      [
+        "user-1",
+        ME.planId,
+        0, // kwh_used zerado no seed (consumo real sobe com charges)
+        ME.monthlyFee,
+        ME.since,
+        ME.nextRenewal,
+        ME.paymentOk,
+      ],
     );
-    for (const s of SUBSCRIBERS) {
-      const linkedUser =
-        s.name === "Bruno Tavares" ? "owner-1"
-        : s.name === "Mariana Souza" ? "user-1"
-        : s.name === "Rafael Mendes" ? "user-2"
-        : s.name === "Carlos Andrade" ? "user-3"
-        : null;
-      await tx.query(
-        `INSERT INTO subscribers (user_id,name,plan,status,since,kwh30d,monthly_fee)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [linkedUser, s.name, s.planId, s.status, s.since, s.kwh30d, s.monthlyFee],
-      );
-    }
+    // Sem subscribers placeholder: tabela fica vazia ate alguem assinar de verdade.
     await tx.query("COMMIT");
   } catch (err) {
     await tx.query("ROLLBACK");
@@ -699,6 +696,70 @@ export async function incrementSubscriptionKwh(subId: number, kwh: number): Prom
     [subId],
   );
   return r.rows[0] ? Number(r.rows[0].kwh_used) : 0;
+}
+
+export type SubscriptionRow = {
+  id: number;
+  userId: string;
+  plan: PlanId;
+  kwhUsed: number;
+  monthlyFee: number;
+  since: string;
+  nextRenewal: string;
+  paymentOk: boolean;
+};
+
+function rowToSubscription(r: {
+  id: number;
+  user_id: string;
+  plan: PlanId;
+  kwh_used: number | string;
+  monthly_fee: number | string;
+  since: string;
+  next_renewal: string;
+  payment_ok: boolean;
+}): SubscriptionRow {
+  return {
+    id: r.id,
+    userId: r.user_id,
+    plan: r.plan,
+    kwhUsed: Number(r.kwh_used),
+    monthlyFee: Number(r.monthly_fee),
+    since: r.since,
+    nextRenewal: r.next_renewal,
+    paymentOk: r.payment_ok,
+  };
+}
+
+/** Retorna a subscription ativa do usuario (a mais recente), ou null. */
+export async function getSubscriptionByUserId(userId: string): Promise<SubscriptionRow | null> {
+  const pool = getPool();
+  const r = await pool.query(
+    `SELECT id, user_id, plan, kwh_used, monthly_fee, since, next_renewal, payment_ok
+     FROM subscriptions WHERE user_id = $1 ORDER BY id DESC LIMIT 1`,
+    [userId],
+  );
+  if (r.rows.length === 0) return null;
+  return rowToSubscription(r.rows[0]);
+}
+
+/** Soma kWh cobrados no mes atual, agrupados por dia (UTC-3). */
+export type DailyKwh = { day: string; kwh: number; revenue: number };
+export async function getDailyKwhLast30Days(): Promise<DailyKwh[]> {
+  const pool = getPool();
+  const r = await pool.query<{ day: string; kwh: string; revenue: string }>(
+    `SELECT to_char(date_trunc('day', c.started_at AT TIME ZONE 'America/Sao_Paulo'), 'DD') AS day,
+            COALESCE(SUM(c.kwh), 0)::text AS kwh,
+            COALESCE(SUM(c.amount), 0)::text AS revenue
+     FROM charges c
+     WHERE c.started_at >= (NOW() - INTERVAL '30 days')
+     GROUP BY 1 ORDER BY 1`,
+  );
+  return r.rows.map((row) => ({
+    day: row.day,
+    kwh: Number(row.kwh),
+    revenue: Number(row.revenue),
+  }));
 }
 
 export async function updateSubscriberStatus(

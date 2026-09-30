@@ -107,9 +107,11 @@ export function TelemetriaClient({
 
   const totalKwh = data.reduce((a, d) => a + d.kwh, 0);
   const totalRev = data.reduce((a, d) => a + d.revenue, 0);
-  const avgKwh = Math.round(totalKwh / data.length);
-  const peak = data.reduce((a, b) => (b.kwh > a.kwh ? b : a), data[0]);
-  const avgTicket = totalRev / totalKwh;
+  const avgKwh = data.length > 0 ? Math.round(totalKwh / data.length) : 0;
+  const peak = data.length > 0
+    ? data.reduce((a, b) => (b.kwh > a.kwh ? b : a), data[0])
+    : null;
+  const avgTicket = totalKwh > 0 ? totalRev / totalKwh : 0;
 
   const byPlan = (() => {
     const noturno = subscribers.filter((s) => s.planId === "noturno");

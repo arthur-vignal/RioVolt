@@ -7,7 +7,6 @@
 import {
   PLANS,
   ME,
-  TELEMETRY_30D,
   type Plan,
   type Point,
   type Booking,
@@ -19,6 +18,7 @@ import {
   listPoints,
   listAllSubscribers,
   listBookingsForDay,
+  getDailyKwhLast30Days,
 } from "@/lib/db";
 
 export type DbSnapshot = {
@@ -31,10 +31,11 @@ export type DbSnapshot = {
 };
 
 export async function getSnapshot(): Promise<DbSnapshot> {
-  const [points, subscribers, bookings] = await Promise.all([
+  const [points, subscribers, bookings, telemetry] = await Promise.all([
     listPoints(),
     listAllSubscribers(),
     listBookingsForDay("today"),
+    getDailyKwhLast30Days(),
   ]);
   return {
     points: points as unknown as Point[],
@@ -42,6 +43,6 @@ export async function getSnapshot(): Promise<DbSnapshot> {
     subscribers: subscribers as unknown as Subscriber[],
     bookings: bookings as unknown as Booking[],
     me: ME,
-    telemetry: TELEMETRY_30D,
+    telemetry: telemetry as unknown as DayPoint[],
   };
 }

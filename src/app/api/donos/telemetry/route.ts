@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { getSubscriberById } from "@/lib/auth-db";
 import { decodeSession, SESSION_COOKIE_NAME } from "@/lib/session";
+import { getDailyKwhLast30Days } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -10,13 +11,13 @@ export async function GET() {
   const session = decodeSession(raw);
 
   if (!session) {
-    return Response.json({ ok: false, user: null }, { status: 200 });
+    return Response.json({ ok: false, series: [] }, { status: 200 });
   }
-
   const user = await getSubscriberById(session.userId);
-  if (!user) {
-    return Response.json({ ok: false, user: null }, { status: 200 });
+  if (!user || user.role !== "donos") {
+    return Response.json({ ok: false, series: [] }, { status: 200 });
   }
 
-  return Response.json({ ok: true, user });
+  const series = await getDailyKwhLast30Days();
+  return Response.json({ ok: true, series });
 }

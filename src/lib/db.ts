@@ -185,6 +185,12 @@ export function updateBookingStatus(id: string, status: Booking["status"]) {
 export function incrementSubscriptionKwh(subId: number, kwh: number) {
   return hasPg() ? pgMod.incrementSubscriptionKwh(subId, kwh) : sqlite().incrementSubscriptionKwh(subId, kwh);
 }
+export function getSubscriptionByUserId(userId: string) {
+  return hasPg() ? pgMod.getSubscriptionByUserId(userId) : Promise.resolve(sqlite().getSubscriptionByUserId(userId));
+}
+export function getDailyKwhLast30Days() {
+  return hasPg() ? pgMod.getDailyKwhLast30Days() : Promise.resolve(sqlite().getDailyKwhLast30Days());
+}
 export function updateSubscriberStatus(id: number, status: Subscriber["status"]) {
   return hasPg() ? pgMod.updateSubscriberStatus(id, status) : sqlite().updateSubscriberStatus(id, status);
 }
