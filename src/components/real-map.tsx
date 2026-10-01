@@ -245,8 +245,11 @@ async function renderMarkers(
           ? "#9ca3af"
           : "#111111";
 
+    // Marker maior para DC (carregamento rapido, equipamento maior),
+    // menor para AC (mais comuns, estacionarios).
+    const isDcHub = p.connectors[0]?.kind === "DC";
     const marker = L.circleMarker([p.lat, p.lon], {
-      radius: 9,
+      radius: isDcHub ? 12 : 9,
       color,
       weight: 2,
       opacity: 1,

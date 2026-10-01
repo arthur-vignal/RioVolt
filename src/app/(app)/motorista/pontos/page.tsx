@@ -73,23 +73,59 @@ export default function PontosPage() {
               </div>
             </div>
 
-            <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                  {p.connectors.map((c) => (
+            <div className="mt-3 grid gap-1.5">
+              {(["AC", "DC"] as const).map((kind) => {
+                const list = p.connectors.filter((c) => c.kind === kind);
+                if (list.length === 0) return null;
+                const free = list.filter((c) => c.status === "free").length;
+                const worst =
+                  list.find((c) => c.status === "in_use") ??
+                  list.find((c) => c.status === "reserved") ??
+                  list.find((c) => c.status === "offline") ??
+                  list[0];
+                const tone =
+                  worst.status === "free"
+                    ? "border-[#16a34a]/30 bg-[#16a34a]/10"
+                    : worst.status === "in_use"
+                      ? "border-black bg-black text-white"
+                      : "border-black/10 bg-black/5 text-black/70";
+                return (
+                  <div
+                    key={kind}
+                    className={cn(
+                      "flex items-center justify-between gap-2 rounded-[6px] border px-2.5 py-1.5",
+                      tone,
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <KindBadge kind={kind} powerKw={list[0].powerKw} />
+                      <span
+                        className={cn(
+                          "text-[12px] font-medium tabular-nums",
+                          worst.status === "free" && "text-[#16a34a]",
+                          worst.status === "in_use" && "text-white",
+                          worst.status === "reserved" && "text-black",
+                          worst.status === "offline" && "text-black/55",
+                        )}
+                      >
+                        {free}/{list.length} livres
+                      </span>
+                    </div>
                     <span
-                      key={c.id}
                       className={cn(
-                        "inline-flex items-center gap-1.5 rounded-[6px] border px-2 py-1 text-[11px]",
-                        STATUS_STYLE[c.status].chip,
-                        STATUS_STYLE[c.status].border,
+                        "text-[10px] font-semibold uppercase tracking-wide",
+                        worst.status === "free" && "text-[#16a34a]/80",
+                        worst.status === "in_use" && "text-white/80",
+                        worst.status === "reserved" && "text-black/70",
+                        worst.status === "offline" && "text-black/55",
                       )}
                     >
-                      <KindBadge kind={c.kind} powerKw={c.powerKw} />
-                      <span className={STATUS_STYLE[c.status].text}>
-                        {STATUS_STYLE[c.status].label}
-                      </span>
+                      {STATUS_STYLE[worst.status].label}
                     </span>
-                  ))}
-                </div>
+                  </div>
+                );
+              })}
+            </div>
 
                 <div className="mt-3 flex items-center gap-2 border-t border-black/10 pt-3">
                   <Link
