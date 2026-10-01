@@ -12,6 +12,7 @@ import {
   DAY_DROP_HOURS,
   DAY_DURATIONS_MIN,
   fmtHour,
+  PRO_MIN_ADVANCE_HOURS,
   type PlanId,
   type Point,
   type ChargerKind,
@@ -29,6 +30,8 @@ import {
   Moon,
   Sun,
   BatteryCharging,
+  Wallet,
+  Sparkles,
 } from "lucide-react";
 
 type Step = "escolher" | "confirmar" | "feito";
@@ -36,16 +39,19 @@ type Step = "escolher" | "confirmar" | "feito";
 type ProfileLite = {
   batteryKwh: number | null;
   carModelId: string | null;
+  /** Plano atual do usuário (vem da assinatura). Default: 'free'. */
+  plan: PlanId;
 };
 
 function fmtNight(h: number): string {
-  // h pode passar de 24 (representa manhã do dia seguinte)
   const norm = ((h % 24) + 24) % 24;
   return fmtHour(norm);
 }
 
 function ReservarContent() {
   const params = useSearchParams();
+  // Modo escolhido pelo user (noite/dia). Pro e Free aceitam ambos,
+  // mas Pro tem regra de antecedencia — server valida.
   const [mode, setMode] = useState<ReservationMode>("noite");
   const [pointId, setPointId] = useState<string>(params.get("ponto") ?? "hub-3");
   const [dropHour, setDropHour] = useState<number>(mode === "noite" ? 21 : 12);
@@ -57,7 +63,6 @@ function ReservarContent() {
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<ProfileLite | null>(null);
 
-  // Busca perfil pra mostrar kWh da bateria (se cadastrado).
   useEffect(() => {
     fetch("/api/profile", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
@@ -66,7 +71,21 @@ function ReservarContent() {
           setProfile({
             batteryKwh: data.profile.batteryKwh ?? null,
             carModelId: data.profile.carModelId ?? null,
+            plan: "pro", // sempre Pro agora (free não tem cadastro)
           });
+        }
+      })
+      .catch(() => undefined);
+
+    // Pega plano do usuario via /api/me/subscription
+    fetch("/api/me/subscription", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.subscription?.planId) {
+          setProfile((prev) => ({
+            ...(prev ?? { batteryKwh: null, carModelId: null }),
+            plan: data.subscription.planId,
+          }));
         }
       })
       .catch(() => undefined);
@@ -74,10 +93,7 @@ function ReservarContent() {
 
   // Filtra hubs pelos modos que aceitam.
   const filteredPoints = useMemo(
-    () =>
-      POINTS.filter((p) =>
-        p.connectors.some((c) => c.modes.includes(mode)),
-      ),
+    () => POINTS.filter((p) => p.connectors.some((c) => c.modes.includes(mode))),
     [mode],
   );
 
@@ -96,7 +112,6 @@ function ReservarContent() {
   );
 
   const hoursList = mode === "noite" ? NIGHT_DROP_HOURS : DAY_DROP_HOURS;
-  const pickupList = mode === "noite" ? NIGHT_PICKUP_HOURS : DAY_DROP_HOURS;
 
   // Reset drop/pickup quando muda modo.
   useEffect(() => {
@@ -109,17 +124,22 @@ function ReservarContent() {
     }
   }, [mode]);
 
-  // Ajusta pickup quando drop muda, mantendo duração razoável.
+  // Ajusta pickup quando drop muda.
   useEffect(() => {
     if (mode === "noite") {
-      // duração noturna típica: 9h (ex: 21→7)
       setPickupHour(dropHour + 10 <= 9 + 24 ? dropHour + 10 : 7 + 24);
     }
   }, [dropHour, mode]);
 
   const durationMin = Math.max(15, Math.round((pickupHour - dropHour) * 60));
   const batteryKwh = profile?.batteryKwh ?? null;
-  const kwhEstimate = batteryKwh ?? null;
+  const plan = profile?.plan ?? "free";
+  const planInfo = PLAN_BY_ID[plan] ?? PLAN_BY_ID.free;
+  // Free: R$30 taxa na retirada. Pro: R$0 (incluso).
+  const reservationFee = plan === "pro" ? 0 : 30;
+  // Estimativa de kWh que sera cobrado (plano Pro desconta da franquia).
+  // Free paga por kWh consumido.
+  const kwhToCharge = batteryKwh ?? null;
 
   async function submit() {
     if (!point) return;
@@ -135,6 +155,7 @@ function ReservarContent() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           connectorId: compatibleConnectors[0].id,
+          plan,
           mode,
           dropHour,
           pickupHour,
@@ -164,6 +185,10 @@ function ReservarContent() {
         <p className="mt-2 text-[13px] text-black/80">
           {point?.name} · {fmtNight(dropHour)} → {fmtNight(pickupHour)} ({mode === "noite" ? "noturno" : "diurno"})
         </p>
+        <p className="mt-1 text-[12px] text-black/60">
+          Plano {planInfo.name}
+          {reservationFee > 0 ? ` · taxa de R$ ${reservationFee} cobrada na retirada` : ""}
+        </p>
 
         <div className="ev-card mt-6 w-full rounded-[6px] border border-black/10 p-5 text-left">
           <h2 className="text-[15px] font-semibold">Como funciona</h2>
@@ -187,9 +212,11 @@ function ReservarContent() {
             <li className="flex gap-3">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] bg-[#f2f3f2] text-[11px] font-semibold">3</span>
               <p>
-                {batteryKwh
-                  ? `kWh cobrado do plano: ${batteryKwh} kWh (capacidade da bateria cadastrada).`
-                  : "Bateria do carro não cadastrada — kWh será cobrado do plano após a carga."}
+                {plan === "pro"
+                  ? batteryKwh
+                    ? `kWh cobrado do plano: ${batteryKwh} kWh (capacidade da bateria cadastrada).`
+                    : "Bateria do carro não cadastrada — kWh será cobrado do plano após a carga."
+                  : `kWh será cobrado pela tarifa do carregador (R$ 2,00/kWh AC ou R$ 2,70/kWh DC).`}
               </p>
             </li>
           </ol>
@@ -219,7 +246,10 @@ function ReservarContent() {
       <div className="mb-6">
         <h1 className="text-[22px] font-semibold tracking-tight sm:text-[28px]">Reservar vaga</h1>
         <p className="mt-1.5 text-[13px] text-black/70 sm:text-[14px]">
-          Plano Pro 150 · 150 kWh inclusos por mês
+          Plano atual: {planInfo.name}
+          {plan === "pro"
+            ? " · 150 kWh inclusos"
+            : " · taxa R$ 30 na retirada"}
         </p>
       </div>
 
@@ -271,9 +301,29 @@ function ReservarContent() {
         </div>
       )}
 
+      {plan === "pro" && (
+        <div className="mb-5 flex items-start gap-2 rounded-[6px] border border-[#16a34a]/30 bg-[#16a34a]/[0.06] p-3 text-[12px] text-[#16a34a]/90">
+          <Sparkles className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>
+            <strong>Plano Pro:</strong> reserva grátis, mas precisa de pelo menos{" "}
+            {PRO_MIN_ADVANCE_HOURS}h de antecedência.
+          </p>
+        </div>
+      )}
+
+      {plan === "free" && (
+        <div className="mb-5 flex items-start gap-2 rounded-[6px] border border-busy/30 bg-busy/[0.06] p-3 text-[12px] text-busy">
+          <Wallet className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>
+            <strong>Plano Grátis:</strong> você paga R$ 30 de taxa na retirada
+            do carro (no totem), e o kWh pela tarifa padrão do carregador.
+          </p>
+        </div>
+      )}
+
       <ol className="mb-6 flex items-center gap-2 text-[12px]">
         {[
-          { k: "escolher", label: mode === "noite" ? "Deixar e buscar" : "Escolher ponto e horário" },
+          { k: "escolher", label: "Escolher ponto e horário" },
           { k: "confirmar", label: "Confirmar" },
           { k: "feito", label: "Reservado" },
         ].map((s, i) => {
@@ -390,7 +440,6 @@ function ReservarContent() {
                     type="button"
                     onClick={() => {
                       setDropHour(h);
-                      // mantém duração atual se já é válida
                       const newPickup = h + durationMin / 60;
                       if (newPickup <= 18) setPickupHour(newPickup);
                       else setPickupHour(Math.min(18, h + 0.5));
@@ -479,34 +528,46 @@ function ReservarContent() {
                   <Timer className="h-3.5 w-3.5" /> Duração
                 </dt>
                 <dd className="text-right font-medium">
-                  {durationMin < 60 ? `${durationMin} min` : `${Math.floor(durationMin / 60)}h${durationMin % 60 ? durationMin % 60 + "min" : ""}`}
+                  {durationMin < 60
+                    ? `${durationMin} min`
+                    : `${Math.floor(durationMin / 60)}h${durationMin % 60 ? durationMin % 60 + "min" : ""}`}
                 </dd>
               </div>
               <div className="flex justify-between gap-3">
                 <dt className="flex items-center gap-1.5 text-black/70">
-                  <BatteryCharging className="h-3.5 w-3.5" /> Bateria cadastrada
+                  <Sparkles className="h-3.5 w-3.5" /> Plano
                 </dt>
-                <dd className="text-right font-medium">
-                  {kwhEstimate ? `${kwhEstimate} kWh` : "—"}
-                </dd>
+                <dd className="text-right font-medium">{planInfo.name}</dd>
               </div>
+              {kwhToCharge !== null && (
+                <div className="flex justify-between gap-3">
+                  <dt className="flex items-center gap-1.5 text-black/70">
+                    <BatteryCharging className="h-3.5 w-3.5" /> Bateria
+                  </dt>
+                  <dd className="text-right font-medium">{kwhToCharge} kWh</dd>
+                </div>
+              )}
             </dl>
 
             <div className="mt-4 space-y-2 border-t border-black/10 pt-4 text-[12px]">
               <p className="text-black/70">
-                kWh cobrados do plano:{" "}
+                Taxa de reserva:{" "}
                 <span className="font-semibold text-black">
-                  {kwhEstimate ? `${kwhEstimate} kWh` : "Bateria não cadastrada"}
+                  {reservationFee === 0
+                    ? "Grátis (Pro incluso)"
+                    : `R$ ${reservationFee.toFixed(2).replace(".", ",")} (cobrada na retirada)`}
                 </span>
               </p>
-              {kwhEstimate === null && (
-                <Link
-                  href="/motorista/perfil"
-                  className="inline-flex items-center gap-1 text-[12px] font-medium text-[#16a34a] underline-offset-2 hover:underline"
-                >
-                  Cadastrar bateria no perfil →
-                </Link>
-              )}
+              <p className="text-black/70">
+                kWh:{" "}
+                <span className="font-semibold text-black">
+                  {plan === "pro"
+                    ? kwhToCharge !== null
+                      ? `${kwhToCharge} kWh da franquia`
+                      : "Bateria não cadastrada"
+                    : `Tarifa padrão: R$ 2,00/kWh AC · R$ 2,70/kWh DC`}
+                </span>
+              </p>
             </div>
 
             {step === "escolher" ? (

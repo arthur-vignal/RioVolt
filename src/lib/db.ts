@@ -181,7 +181,7 @@ export function getCharge(bookingId: string) {
 export function createBooking(input: {
   userId: string;
   connectorId: string;
-  plan: "pro";
+  plan: "free" | "pro";
   mode: "noite" | "dia";
   dropHour: number;
   pickupHour: number;
@@ -242,7 +242,7 @@ export function createReservation(input: {
   userId: string;
   pointId: string;
   connectorId: string;
-  planId: "pro";
+  planId: "free" | "pro";
   mode: "noite" | "dia";
   dropHour: number;
   pickupHour: number;

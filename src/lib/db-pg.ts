@@ -104,7 +104,8 @@ export async function initSchema(): Promise<void> {
       power_kw    DOUBLE PRECISION NOT NULL,
       status      TEXT NOT NULL CHECK (status IN ('free','reserved','in_use','offline')),
       note        TEXT,
-      modes       TEXT[] NOT NULL DEFAULT ARRAY['noite','dia']::TEXT[]
+      modes       TEXT[] NOT NULL DEFAULT ARRAY['noite','dia']::TEXT[],
+      current_charge JSONB
     );
 
     CREATE TABLE IF NOT EXISTS bookings (
@@ -112,26 +113,27 @@ export async function initSchema(): Promise<void> {
       user_id       TEXT REFERENCES users(id) ON DELETE SET NULL,
       connector_id  TEXT NOT NULL REFERENCES connectors(id) ON DELETE CASCADE,
       point_id      TEXT NOT NULL REFERENCES points(id) ON DELETE CASCADE,
-      plan          TEXT NOT NULL CHECK (plan IN ('noturno','pro')),
+      plan          TEXT NOT NULL CHECK (plan IN ('free','pro')),
       mode          TEXT NOT NULL CHECK (mode IN ('noite','dia')),
       drop_hour     DOUBLE PRECISION NOT NULL,
       pickup_hour   DOUBLE PRECISION NOT NULL,
       duration_min  INTEGER NOT NULL,
+      reservation_fee DOUBLE PRECISION NOT NULL DEFAULT 0,
       status        TEXT NOT NULL CHECK (status IN ('confirmed','pending','cancelled','no_show','done','in_progress')),
       created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
     CREATE TABLE IF NOT EXISTS subscriptions (
-          id            SERIAL PRIMARY KEY,
-          user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-          plan          TEXT NOT NULL CHECK (plan IN ('noturno','pro')),
-          kwh_used      DOUBLE PRECISION NOT NULL DEFAULT 0,
-          monthly_fee   DOUBLE PRECISION NOT NULL,
-          since         TEXT NOT NULL,
-          next_renewal  TEXT NOT NULL,
-          payment_ok    BOOLEAN NOT NULL DEFAULT TRUE,
-          cycle_start   TIMESTAMPTZ NOT NULL DEFAULT date_trunc('month', now()),
-          cupons_ac_used INTEGER NOT NULL DEFAULT 0
+      id            SERIAL PRIMARY KEY,
+      user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      plan          TEXT NOT NULL CHECK (plan IN ('free','pro')),
+      kwh_used      DOUBLE PRECISION NOT NULL DEFAULT 0,
+      monthly_fee   DOUBLE PRECISION NOT NULL,
+      since         TEXT NOT NULL,
+      next_renewal  TEXT NOT NULL,
+      payment_ok    BOOLEAN NOT NULL DEFAULT TRUE,
+      cycle_start   TIMESTAMPTZ NOT NULL DEFAULT date_trunc('month', now()),
+      cupons_ac_used INTEGER NOT NULL DEFAULT 0
         );
 
     CREATE TABLE IF NOT EXISTS subscribers (
@@ -203,6 +205,45 @@ export async function initSchema(): Promise<void> {
   `).catch((err) => {
     console.error("[voltrio/db-pg] falha ao adicionar bookings.pickup_hour:", err instanceof Error ? err.message : err);
   });
+  // Bookings: reservation_fee (cobrada na retirada do plano Free)
+  await pool.query(`
+    ALTER TABLE bookings
+      ADD COLUMN IF NOT EXISTS reservation_fee DOUBLE PRECISION NOT NULL DEFAULT 0;
+  `).catch((err) => {
+    console.error("[voltrio/db-pg] falha ao adicionar bookings.reservation_fee:", err instanceof Error ? err.message : err);
+  });
+  // CHECK de plan em bookings: aceitar 'free', 'pro' e 'noturno' legado
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'bookings_plan_check'
+      ) THEN
+        ALTER TABLE bookings DROP CONSTRAINT bookings_plan_check;
+      END IF;
+    END$$;
+    ALTER TABLE bookings ADD CONSTRAINT bookings_plan_check
+      CHECK (plan IN ('free','pro','noturno'));
+  `).catch((err) => {
+    console.error("[voltrio/db-pg] falha ao ajustar bookings.plan check:", err instanceof Error ? err.message : err);
+  });
+  // CHECK de plan em subscriptions: idem
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'subscriptions_plan_check'
+      ) THEN
+        ALTER TABLE subscriptions DROP CONSTRAINT subscriptions_plan_check;
+      END IF;
+    END$$;
+    ALTER TABLE subscriptions ADD CONSTRAINT subscriptions_plan_check
+      CHECK (plan IN ('free','pro','noturno'));
+  `).catch((err) => {
+    console.error("[voltrio/db-pg] falha ao ajustar subscriptions.plan check:", err instanceof Error ? err.message : err);
+  });
   // Relaxa constraint do CHECK pra aceitar 'noite' alem de 'noturno' (legado)
   await pool.query(`
     ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_mode_check;
@@ -217,6 +258,13 @@ export async function initSchema(): Promise<void> {
       ADD COLUMN IF NOT EXISTS modes TEXT[] NOT NULL DEFAULT ARRAY['noite','dia']::TEXT[];
   `).catch((err) => {
     console.error("[voltrio/db-pg] falha ao adicionar connectors.modes:", err instanceof Error ? err.message : err);
+  });
+  // Connectors: current_charge (carga em andamento, alimenta estimativa)
+  await pool.query(`
+    ALTER TABLE connectors
+      ADD COLUMN IF NOT EXISTS current_charge JSONB;
+  `).catch((err) => {
+    console.error("[voltrio/db-pg] falha ao adicionar connectors.current_charge:", err instanceof Error ? err.message : err);
   });
 
   // ensure default 'in_progress' exists in CHECK (post-migration safety)
@@ -378,6 +426,7 @@ type ConnectorRow = {
   status: PointStatus;
   note: string | null;
   modes: string[] | null;
+  current_charge: { startedAt: number; kwhTarget: number; kwhDelivered: number } | null;
 };
 
 type BookingRow = {
@@ -390,6 +439,7 @@ type BookingRow = {
   drop_hour: number;
   pickup_hour: number;
   duration_min: number;
+  reservation_fee: number;
   status: Booking["status"];
   created_at: string;
 };
@@ -419,6 +469,7 @@ function rowToConnector(r: ConnectorRow): Connector {
         : r.kind === "DC"
           ? ["dia"]
           : ["noite", "dia"],
+    currentCharge: r.current_charge ?? null,
   };
 }
 
@@ -456,6 +507,7 @@ async function rowToBooking(r: BookingRow): Promise<Booking> {
     dropHour: Number(r.drop_hour),
     pickupHour: Number(r.pickup_hour),
     durationMin: r.duration_min,
+    reservationFee: Number(r.reservation_fee ?? 0),
     status: r.status,
   };
 }
@@ -793,9 +845,12 @@ export async function createBooking(input: {
   }
 
   const id = `b-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  // Calcula reservation_fee baseado no plano.
+  // Pro: 0 (incluído). Free: 30 (cobrado na retirada).
+  const reservationFee = input.plan === "pro" ? 0 : 30;
   await pool.query(
-    `INSERT INTO bookings (id,user_id,connector_id,point_id,plan,mode,drop_hour,pickup_hour,duration_min,status)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'confirmed')`,
+    `INSERT INTO bookings (id,user_id,connector_id,point_id,plan,mode,drop_hour,pickup_hour,duration_min,reservation_fee,status)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'confirmed')`,
     [
       id,
       input.userId,
@@ -806,6 +861,7 @@ export async function createBooking(input: {
       input.dropHour,
       input.pickupHour,
       durationMin,
+      reservationFee,
     ],
   );
   await pool.query("UPDATE connectors SET status = 'reserved' WHERE id = $1", [input.connectorId]);

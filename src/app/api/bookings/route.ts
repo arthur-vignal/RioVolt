@@ -5,6 +5,7 @@ import {
   listBookingsForUser,
   listChargesForUser,
 } from "@/lib/db";
+import { PRO_MIN_ADVANCE_HOURS } from "@/lib/mock-data";
 
 export const dynamic = "force-dynamic";
 
@@ -30,18 +31,44 @@ export async function POST(request: NextRequest) {
   }
   const b = body as Record<string, unknown>;
   const connectorId = typeof b.connectorId === "string" ? b.connectorId : "";
+  const plan = b.plan === "free" || b.plan === "pro" ? b.plan : null;
   const mode = b.mode === "noite" || b.mode === "dia" ? b.mode : null;
   const dropHour = Number(b.dropHour);
   const pickupHour = Number(b.pickupHour);
-  if (!connectorId || !mode || !Number.isFinite(dropHour) || !Number.isFinite(pickupHour)) {
+  if (!connectorId || !plan || !mode || !Number.isFinite(dropHour) || !Number.isFinite(pickupHour)) {
     return NextResponse.json({ error: "Campos obrigatórios ausentes" }, { status: 400 });
   }
+
+  // Validacao de antecedência (Pro): precisa agendar com pelo menos 2h de antecedência.
+  // Free nao tem regra de antecedência (chega e usa).
+  if (plan === "pro") {
+    // Converte dropHour (decimal) em timestamp absoluto, assumindo a próxima
+    // ocorrência futura. Se dropHour > hora atual, é hoje; senão, amanhã.
+    const now = new Date();
+    const dropDate = new Date(now);
+    dropDate.setHours(Math.floor(dropHour), Math.round((dropHour % 1) * 60), 0, 0);
+    if (dropDate.getTime() < now.getTime()) {
+      // Já passou da hora hoje — empurra pra amanhã.
+      dropDate.setDate(dropDate.getDate() + 1);
+    }
+    const minAdvanceMs = PRO_MIN_ADVANCE_HOURS * 3600 * 1000;
+    if (dropDate.getTime() < now.getTime() + minAdvanceMs) {
+      return NextResponse.json(
+        {
+          error: `Reserva Pro precisa de pelo menos ${PRO_MIN_ADVANCE_HOURS}h de antecedência.`,
+          code: "PRO_MIN_ADVANCE",
+        },
+        { status: 400 },
+      );
+    }
+  }
+
   let booking;
   try {
     booking = await createBooking({
       userId,
       connectorId,
-      plan: "pro",
+      plan,
       mode,
       dropHour,
       pickupHour,
@@ -53,10 +80,6 @@ export async function POST(request: NextRequest) {
       pickup_before_drop: {
         status: 400,
         error: "Horário de retirada deve ser depois do horário de deixar.",
-      },
-      mode_not_supported: {
-        status: 409,
-        error: "Esse conector não aceita esse tipo de reserva.",
       },
       drop_out_of_night_window: {
         status: 400,

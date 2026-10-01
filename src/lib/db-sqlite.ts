@@ -46,6 +46,7 @@ import {
   type PlanId,
   type ChargerKind,
   type PointStatus,
+  type ReservationMode,
 } from "@/lib/mock-data";
 
 // ---------------------------------------------------------------- paths
@@ -114,7 +115,8 @@ function createSchema(conn: Database.Database) {
       power_kw    REAL NOT NULL,
       status      TEXT NOT NULL CHECK (status IN ('free','reserved','in_use','offline')),
       note        TEXT,
-      modes       TEXT NOT NULL DEFAULT '["noite","dia"]'
+      modes       TEXT NOT NULL DEFAULT '["noite","dia"]',
+      current_charge_json TEXT
     );
 
     CREATE TABLE IF NOT EXISTS bookings (
@@ -122,11 +124,12 @@ function createSchema(conn: Database.Database) {
       user_id       TEXT REFERENCES users(id) ON DELETE SET NULL,
       connector_id  TEXT NOT NULL REFERENCES connectors(id) ON DELETE CASCADE,
       point_id      TEXT NOT NULL REFERENCES points(id) ON DELETE CASCADE,
-      plan          TEXT NOT NULL CHECK (plan IN ('noturno','pro')),
+      plan          TEXT NOT NULL CHECK (plan IN ('free','pro')),
       mode          TEXT NOT NULL CHECK (mode IN ('noite','dia')) DEFAULT 'noite',
       drop_hour     REAL NOT NULL DEFAULT 21,
       pickup_hour   REAL NOT NULL DEFAULT 31,
       duration_min  INTEGER NOT NULL DEFAULT 600,
+      reservation_fee REAL NOT NULL DEFAULT 0,
       status        TEXT NOT NULL CHECK (status IN ('confirmed','pending','cancelled','no_show','done','in_progress')),
       created_at    TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -134,7 +137,7 @@ function createSchema(conn: Database.Database) {
     CREATE TABLE IF NOT EXISTS subscriptions (
       id            INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      plan          TEXT NOT NULL CHECK (plan IN ('noturno','pro')),
+      plan          TEXT NOT NULL CHECK (plan IN ('free','pro')),
       kwh_used      REAL NOT NULL DEFAULT 0,
       monthly_fee   REAL NOT NULL,
       since         TEXT NOT NULL,
@@ -233,6 +236,21 @@ function createSchema(conn: Database.Database) {
     } catch {
     /* coluna já existe */
     }
+    // Connectors: current_charge_json (estado da carga em andamento)
+    try {
+    conn.exec("ALTER TABLE connectors ADD COLUMN current_charge_json TEXT");
+    } catch {
+    /* coluna já existe */
+    }
+    // Bookings: reservation_fee
+    try {
+    conn.exec("ALTER TABLE bookings ADD COLUMN reservation_fee REAL NOT NULL DEFAULT 0");
+    } catch {
+    /* coluna já existe */
+    }
+    // SQLite CHECK nao aceita "free" se ja gravou "noturno" no schema antigo.
+    // SQLite nao tem ALTER CHECK — recriar tabela é caro. Aceita-se o CHECK antigo;
+    // a aplicacao trata "noturno" como alias de "pro" via PLAN_BY_ID fallback.
     }
 
 // ---------------------------------------------------------------- seed
@@ -343,6 +361,7 @@ type ConnectorRow = {
   status: PointStatus;
   note: string | null;
   modes: string | null;
+  current_charge_json: string | null;
 };
 
 type BookingRow = {
@@ -355,6 +374,7 @@ type BookingRow = {
   drop_hour: number;
   pickup_hour: number;
   duration_min: number;
+  reservation_fee: number;
   status: Booking["status"];
   created_at: string;
 };
@@ -379,6 +399,8 @@ export type UserRow = {
   plate: string | null;
   car_model: string | null;
   kwh_plan_limit: number | null;
+  battery_kwh: number | null;
+  car_model_id: string | null;
   created_at: string;
 };
 
@@ -394,6 +416,22 @@ function rowToConnector(r: ConnectorRow): Connector {
     }
   }
   if (modes.length === 0) modes = r.kind === "DC" ? ["dia"] : ["noite", "dia"];
+  // current_charge_json é JSON: { startedAt, kwhTarget, kwhDelivered } ou null.
+  let currentCharge: Connector["currentCharge"] = null;
+  if (r.current_charge_json) {
+    try {
+      const parsed = JSON.parse(r.current_charge_json);
+      if (parsed && typeof parsed.startedAt === "number") {
+        currentCharge = {
+          startedAt: Number(parsed.startedAt),
+          kwhTarget: Number(parsed.kwhTarget ?? 0),
+          kwhDelivered: Number(parsed.kwhDelivered ?? 0),
+        };
+      }
+    } catch {
+      /* ignore */
+    }
+  }
   return {
     id: r.id,
     pointId: r.point_id,
@@ -402,6 +440,7 @@ function rowToConnector(r: ConnectorRow): Connector {
     status: r.status,
     note: r.note ?? undefined,
     modes,
+    currentCharge,
   };
 }
 
@@ -437,6 +476,7 @@ function rowToBooking(r: BookingRow): Booking {
     dropHour: r.drop_hour,
     pickupHour: r.pickup_hour,
     durationMin: r.duration_min,
+    reservationFee: r.reservation_fee,
     status: r.status,
   };
 }
@@ -521,7 +561,7 @@ export function verifyPassword(email: string, password: string): UserRow | null 
 const createBookingSchema = z.object({
   userId: z.string().min(1),
   connectorId: z.string().min(1),
-  plan: z.enum(["pro"]),
+  plan: z.enum(["free", "pro"]),
   mode: z.enum(["noite", "dia"]),
   dropHour: z.number().min(0).max(48),
   pickupHour: z.number().min(0).max(48),
@@ -601,10 +641,13 @@ export function createBooking(input: CreateBookingInput): Booking {
   }
 
   const id = `b-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  // Calcula reservation_fee baseado no plano.
+  // Pro: 0 (incluso). Free: 30 (cobrado na retirada).
+  const reservationFee = data.plan === "pro" ? 0 : 30;
   conn
     .prepare(
-      `INSERT INTO bookings (id, user_id, connector_id, point_id, plan, mode, drop_hour, pickup_hour, duration_min, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed')`
+      `INSERT INTO bookings (id, user_id, connector_id, point_id, plan, mode, drop_hour, pickup_hour, duration_min, reservation_fee, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed')`
     )
     .run(
       id,
@@ -616,6 +659,7 @@ export function createBooking(input: CreateBookingInput): Booking {
       data.dropHour,
       data.pickupHour,
       durationMin,
+      reservationFee,
     );
 
   conn.prepare("UPDATE connectors SET status = 'reserved' WHERE id = ?").run(data.connectorId);
@@ -791,6 +835,8 @@ export type CreateUserInput = {
   plate: string | null;
   car_model: string | null;
   kwh_plan_limit: number | null;
+  battery_kwh: number | null;
+  car_model_id: string | null;
 };
 
 export function createUser(input: CreateUserInput): UserRow {

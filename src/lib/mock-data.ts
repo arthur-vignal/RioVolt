@@ -4,6 +4,17 @@
 export type ChargerKind = "AC" | "DC";
 export type PointStatus = "free" | "reserved" | "in_use" | "offline";
 export type ReservationMode = "noite" | "dia";
+export type PlanId = "free" | "pro";
+
+/** Dados de uma carga em andamento — alimenta a estimativa de tempo restante. */
+export type CurrentCharge = {
+  /** epoch ms em que a carga começou. */
+  startedAt: number;
+  /** kWh-alvo planejado pro carro (capacidade da bateria que foi carregada). */
+  kwhTarget: number;
+  /** kWh já entregues estimado em T_atual. */
+  kwhDelivered: number;
+};
 
 export type Connector = {
   id: string;
@@ -13,6 +24,8 @@ export type Connector = {
   modes: ReservationMode[];
   powerKw: number;
   status: PointStatus;
+  /** dados da carga em andamento (se status='in_use'). null/free se nao. */
+  currentCharge: CurrentCharge | null;
   /** conector travado por veículo a combustão ou em manutenção */
   note?: string;
 };
@@ -43,8 +56,8 @@ export const POINTS: Point[] = [
     openHours: "06h às 22h",
     partner: "Shopping Rio Sul",
     connectors: [
-      { id: "h1c1", pointId: "h1", kind: "DC", modes: ["dia"], powerKw: 50, status: "free" },
-      { id: "h1c2", pointId: "h1", kind: "DC", modes: ["dia"], powerKw: 50, status: "free" },
+      { id: "h1c1", pointId: "h1", kind: "DC", modes: ["dia"], powerKw: 50, status: "in_use", currentCharge: { startedAt: Date.now() - 18 * 60 * 1000, kwhTarget: 60, kwhDelivered: 15 } },
+      { id: "h1c2", pointId: "h1", kind: "DC", modes: ["dia"], powerKw: 50, status: "free", currentCharge: null },
     ],
   },
   {
@@ -58,8 +71,8 @@ export const POINTS: Point[] = [
     openHours: "06h às 22h",
     partner: "Shopping Leblon",
     connectors: [
-      { id: "h2c1", pointId: "h2", kind: "DC", modes: ["dia"], powerKw: 50, status: "free" },
-      { id: "h2c2", pointId: "h2", kind: "DC", modes: ["dia"], powerKw: 50, status: "free" },
+      { id: "h2c1", pointId: "h2", kind: "DC", modes: ["dia"], powerKw: 50, status: "free", currentCharge: null },
+      { id: "h2c2", pointId: "h2", kind: "DC", modes: ["dia"], powerKw: 50, status: "reserved", currentCharge: null },
     ],
   },
   // Hubs AC — noturno (moradores deixando carro) E diurno (recarga curta).
@@ -74,14 +87,14 @@ export const POINTS: Point[] = [
     openHours: "24 horas",
     partner: "gEpark",
     connectors: [
-      { id: "h3c1", pointId: "h3", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h3c2", pointId: "h3", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h3c3", pointId: "h3", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h3c4", pointId: "h3", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h3c5", pointId: "h3", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h3c6", pointId: "h3", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h3c7", pointId: "h3", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h3c8", pointId: "h3", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
+      { id: "h3c1", pointId: "h3", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
+      { id: "h3c2", pointId: "h3", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "in_use", currentCharge: { startedAt: Date.now() - 90 * 60 * 1000, kwhTarget: 44.9, kwhDelivered: 33 } },
+      { id: "h3c3", pointId: "h3", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
+      { id: "h3c4", pointId: "h3", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "reserved", currentCharge: null },
+      { id: "h3c5", pointId: "h3", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
+      { id: "h3c6", pointId: "h3", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
+      { id: "h3c7", pointId: "h3", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
+      { id: "h3c8", pointId: "h3", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
     ],
   },
   {
@@ -95,14 +108,14 @@ export const POINTS: Point[] = [
     openHours: "24 horas",
     partner: "Estapar",
     connectors: [
-      { id: "h4c1", pointId: "h4", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h4c2", pointId: "h4", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h4c3", pointId: "h4", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h4c4", pointId: "h4", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h4c5", pointId: "h4", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h4c6", pointId: "h4", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h4c7", pointId: "h4", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h4c8", pointId: "h4", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
+      { id: "h4c1", pointId: "h4", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
+      { id: "h4c2", pointId: "h4", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
+      { id: "h4c3", pointId: "h4", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "in_use", currentCharge: { startedAt: Date.now() - 35 * 60 * 1000, kwhTarget: 26.8, kwhDelivered: 12.8 } },
+      { id: "h4c4", pointId: "h4", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
+      { id: "h4c5", pointId: "h4", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
+      { id: "h4c6", pointId: "h4", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
+      { id: "h4c7", pointId: "h4", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
+      { id: "h4c8", pointId: "h4", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
     ],
   },
   {
@@ -116,14 +129,14 @@ export const POINTS: Point[] = [
     openHours: "24 horas",
     partner: "gEpark",
     connectors: [
-      { id: "h5c1", pointId: "h5", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h5c2", pointId: "h5", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h5c3", pointId: "h5", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h5c4", pointId: "h5", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h5c5", pointId: "h5", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h5c6", pointId: "h5", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h5c7", pointId: "h5", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h5c8", pointId: "h5", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
+      { id: "h5c1", pointId: "h5", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
+      { id: "h5c2", pointId: "h5", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "offline", currentCharge: null },
+      { id: "h5c3", pointId: "h5", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
+      { id: "h5c4", pointId: "h5", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
+      { id: "h5c5", pointId: "h5", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
+      { id: "h5c6", pointId: "h5", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
+      { id: "h5c7", pointId: "h5", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
+      { id: "h5c8", pointId: "h5", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
     ],
   },
   {
@@ -137,14 +150,14 @@ export const POINTS: Point[] = [
     openHours: "24 horas",
     partner: "Shopping Leblon",
     connectors: [
-      { id: "h6c1", pointId: "h6", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h6c2", pointId: "h6", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h6c3", pointId: "h6", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h6c4", pointId: "h6", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h6c5", pointId: "h6", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h6c6", pointId: "h6", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h6c7", pointId: "h6", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
-      { id: "h6c8", pointId: "h6", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free" },
+      { id: "h6c1", pointId: "h6", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
+      { id: "h6c2", pointId: "h6", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
+      { id: "h6c3", pointId: "h6", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
+      { id: "h6c4", pointId: "h6", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
+      { id: "h6c5", pointId: "h6", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
+      { id: "h6c6", pointId: "h6", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
+      { id: "h6c7", pointId: "h6", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
+      { id: "h6c8", pointId: "h6", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
     ],
   },
 ];
@@ -179,48 +192,80 @@ export function carModelById(id: string): CarModel | undefined {
 }
 
 
-// ---------------------------------------------------------------- plano único
-
-export type PlanId = "pro";
+// ---------------------------------------------------------------- planos
 
 export type Plan = {
   id: PlanId;
   name: string;
   tagline: string;
   audience: string;
+  /** Mensalidade. Plano free = R$0. */
   monthlyFee: number;
+  /** kWh inclusos na franquia (Pro). Free = null (sem franquia). */
   includedKwh: number | null;
-  /** valor por kWh dentro da franquia */
-  includedKwhRate: number;
-  /** valor por kWh no excedente */
+  /** valor por kWh dentro da franquia (Pro). Free = null. */
+  includedKwhRate: number | null;
+  /** valor por kWh no excedente (Pro) ou valor base do kWh (Free, sem excedente). */
   overageRate: number;
-  /** o que o plano dá de direito */
+  /** taxa fixa cobrada na retirada (free). Pro = 0. */
+  reservationFee: number;
+  /** antecedência mínima em horas pra reservar (Pro). Free = null (sem reserva). */
+  antecedenciaMinHoras: number | null;
   perks: string[];
   accent: string;
 };
 
 export const PLANS: Plan[] = [
   {
-    id: "pro",
-    name: "Pro 150",
-    tagline: "Recarga noturna e diurna pra rodar 150 kWh por mês sem preocupação",
-    audience: "Motoristas de app e moradores sem garagem",
-    monthlyFee: 375,
-    includedKwh: 150,
-    includedKwhRate: 1.79,
-    overageRate: 2.49,
+    id: "free",
+    name: "Grátis",
+    tagline: "Sem assinatura, paga por carga",
+    audience: "Motorista eventual, primeira experiência",
+    monthlyFee: 0,
+    includedKwh: null,
+    includedKwhRate: null,
+    overageRate: 0,
+    reservationFee: 30,
+    antecedenciaMinHoras: null,
     perks: [
-      "150 kWh inclusos por mês",
-      "Cobrança pelo kWh da bateria do seu carro (cadastrada no perfil)",
-      "Reserva noturna em AC (deixar 18h–6h, buscar até 9h)",
-      "Reserva diurna em AC e DC (6h–20h)",
-      "Sem taxa de no-show em reservas confirmadas",
+      "Vê disponibilidade de todos os carregadores",
+      "Vê tempo restante estimado da carga em andamento",
+      "Sem reserva: chega no hub e conecta",
+      "Tarifa padrão: R$ 2,00/kWh AC · R$ 2,70/kWh DC",
+      "Taxa de R$ 30 cobrada no totem na retirada",
+    ],
+    accent: "text-black/70",
+  },
+  {
+    id: "pro",
+    name: "Pro",
+    tagline: "Assinatura mensal pra rodar 150 kWh sem pagar por carga",
+    audience: "Moradores sem garagem e motoristas de app",
+    monthlyFee: 374.99,
+    includedKwh: 150,
+    includedKwhRate: 0,
+    overageRate: 0,
+    reservationFee: 0,
+    antecedenciaMinHoras: 2,
+    perks: [
+      "150 kWh inclusos por mês (AC ou DC)",
+      "Reserva grátis com pelo menos 2h de antecedência",
+      "Noturna (deixar 18h-6h, buscar até 9h) ou diurna (6h-18h)",
+      "Sem taxa de retirada",
     ],
     accent: "text-ac",
   },
 ];
 
 export const PLAN_BY_ID = Object.fromEntries(PLANS.map((p) => [p.id, p])) as Record<PlanId, Plan>;
+
+// ---------------------------------------------------------------- regra de preço no plano Free
+
+/** Tarifa de kWh por tipo de conector — cobrada dos usuários free. */
+export const FREE_KWH_RATE: Record<ChargerKind, number> = {
+  AC: 2.0,
+  DC: 2.7,
+};
 
 
 // ---------------------------------------------------------------- assinante mock
@@ -240,7 +285,7 @@ export const ME: Subscription = {
   since: "março de 2026",
   kwhUsed: 168,
   lastCharge: "ontem, 23h40",
-  monthlyFee: 375,
+  monthlyFee: 374.99,
   nextRenewal: "05 de outubro",
   paymentOk: true,
 };
@@ -262,6 +307,8 @@ export type Booking = {
   pickupHour: number;
   /** duração em minutos (derivada de pickupHour - dropHour). */
   durationMin: number;
+  /** taxa fixa cobrada na máquina (free = 30, pro = 0). */
+  reservationFee: number;
   status: "confirmed" | "pending" | "cancelled" | "no_show" | "done" | "in_progress";
 };
 
@@ -275,19 +322,19 @@ export const fmtHour = h;
 
 export const BOOKINGS: Booking[] = [
   // noturnos
-  { id: "b1", connectorId: "h3c1", pointId: "hub-3", user: "Mariana S.", planId: "pro", mode: "noite", dropHour: 21, pickupHour: 7 + 24, durationMin: 10 * 60, status: "confirmed" },
-  { id: "b2", connectorId: "h3c2", pointId: "hub-3", user: "Rafael M.", planId: "pro", mode: "noite", dropHour: 21, pickupHour: 7 + 24, durationMin: 10 * 60, status: "confirmed" },
-  { id: "b3", connectorId: "h3c3", pointId: "hub-3", user: "Juliana P.", planId: "pro", mode: "noite", dropHour: 22, pickupHour: 8 + 24, durationMin: 10 * 60, status: "confirmed" },
-  { id: "b4", connectorId: "h4c1", pointId: "hub-4", user: "Patrícia L.", planId: "pro", mode: "noite", dropHour: 23, pickupHour: 8 + 24, durationMin: 9 * 60, status: "confirmed" },
-  { id: "b5", connectorId: "h4c2", pointId: "hub-4", user: "Thiago B.", planId: "pro", mode: "noite", dropHour: 21.5, pickupHour: 7.5 + 24, durationMin: 10 * 60, status: "confirmed" },
-  { id: "b6", connectorId: "h5c1", pointId: "hub-5", user: "Fernanda C.", planId: "pro", mode: "noite", dropHour: 20, pickupHour: 6 + 24, durationMin: 10 * 60, status: "no_show" },
+  { id: "b1", connectorId: "h3c1", pointId: "hub-3", user: "Mariana S.", planId: "pro", mode: "noite", dropHour: 21, pickupHour: 7 + 24, durationMin: 10 * 60, reservationFee: 0, status: "confirmed" },
+  { id: "b2", connectorId: "h3c2", pointId: "hub-3", user: "Rafael M.", planId: "pro", mode: "noite", dropHour: 21, pickupHour: 7 + 24, durationMin: 10 * 60, reservationFee: 0, status: "confirmed" },
+  { id: "b3", connectorId: "h3c3", pointId: "hub-3", user: "Juliana P.", planId: "pro", mode: "noite", dropHour: 22, pickupHour: 8 + 24, durationMin: 10 * 60, reservationFee: 0, status: "confirmed" },
+  { id: "b4", connectorId: "h4c1", pointId: "hub-4", user: "Patrícia L.", planId: "pro", mode: "noite", dropHour: 23, pickupHour: 8 + 24, durationMin: 9 * 60, reservationFee: 0, status: "confirmed" },
+  { id: "b5", connectorId: "h4c2", pointId: "hub-4", user: "Thiago B.", planId: "pro", mode: "noite", dropHour: 21.5, pickupHour: 7.5 + 24, durationMin: 10 * 60, reservationFee: 0, status: "confirmed" },
+  { id: "b6", connectorId: "h5c1", pointId: "hub-5", user: "Fernanda C.", planId: "pro", mode: "noite", dropHour: 20, pickupHour: 6 + 24, durationMin: 10 * 60, reservationFee: 0, status: "no_show" },
   // diurnos
-  { id: "b7", connectorId: "h1c1", pointId: "hub-1", user: "Carlos A. (99)", planId: "pro", mode: "dia", dropHour: 12, pickupHour: 12.75, durationMin: 45, status: "confirmed" },
-  { id: "b8", connectorId: "h1c2", pointId: "hub-1", user: "Bruno T. (Uber)", planId: "pro", mode: "dia", dropHour: 19, pickupHour: 19.67, durationMin: 40, status: "confirmed" },
-  { id: "b9", connectorId: "h2c1", pointId: "hub-2", user: "Diego R.", planId: "pro", mode: "dia", dropHour: 13, pickupHour: 13.83, durationMin: 50, status: "confirmed" },
-  { id: "b10", connectorId: "h4c3", pointId: "hub-4", user: "Ana Paula (99)", planId: "pro", mode: "dia", dropHour: 11, pickupHour: 11.5, durationMin: 30, status: "confirmed" },
-  { id: "b11", connectorId: "h5c2", pointId: "hub-5", user: "Lucas F.", planId: "pro", mode: "dia", dropHour: 14, pickupHour: 15, durationMin: 60, status: "confirmed" },
-  { id: "b12", connectorId: "h2c2", pointId: "hub-2", user: "—", planId: "pro", mode: "dia", dropHour: 10, pickupHour: 10.67, durationMin: 40, status: "cancelled" },
+  { id: "b7", connectorId: "h1c1", pointId: "hub-1", user: "Carlos A. (99)", planId: "pro", mode: "dia", dropHour: 12, pickupHour: 12.75, durationMin: 45, reservationFee: 0, status: "confirmed" },
+  { id: "b8", connectorId: "h1c2", pointId: "hub-1", user: "Bruno T. (Uber)", planId: "pro", mode: "dia", dropHour: 19, pickupHour: 19.67, durationMin: 40, reservationFee: 0, status: "confirmed" },
+  { id: "b9", connectorId: "h2c1", pointId: "hub-2", user: "Diego R.", planId: "pro", mode: "dia", dropHour: 13, pickupHour: 13.83, durationMin: 50, reservationFee: 0, status: "confirmed" },
+  { id: "b10", connectorId: "h4c3", pointId: "hub-4", user: "Ana Paula (99)", planId: "pro", mode: "dia", dropHour: 11, pickupHour: 11.5, durationMin: 30, reservationFee: 0, status: "confirmed" },
+  { id: "b11", connectorId: "h5c2", pointId: "hub-5", user: "Lucas F.", planId: "pro", mode: "dia", dropHour: 14, pickupHour: 15, durationMin: 60, reservationFee: 0, status: "confirmed" },
+  { id: "b12", connectorId: "h2c2", pointId: "hub-2", user: "—", planId: "pro", mode: "dia", dropHour: 10, pickupHour: 10.67, durationMin: 40, reservationFee: 0, status: "cancelled" },
 ];
 
 
@@ -303,18 +350,18 @@ export type Subscriber = {
 };
 
 export const SUBSCRIBERS: Subscriber[] = [
-  { name: "Mariana S.", planId: "pro", status: "ativo", since: "mar/2026", kwh30d: 168, monthlyFee: 375 },
-  { name: "Rafael M.", planId: "pro", status: "ativo", since: "jan/2026", kwh30d: 214, monthlyFee: 375 },
-  { name: "Juliana P.", planId: "pro", status: "ativo", since: "abr/2026", kwh30d: 92, monthlyFee: 375 },
-  { name: "Patrícia L.", planId: "pro", status: "ativo", since: "fev/2026", kwh30d: 245, monthlyFee: 375 },
-  { name: "Thiago B.", planId: "pro", status: "ativo", since: "jun/2026", kwh30d: 61, monthlyFee: 375 },
-  { name: "Fernanda C.", planId: "pro", status: "inadimplente", since: "nov/2025", kwh30d: 187, monthlyFee: 375 },
-  { name: "Carlos A.", planId: "pro", status: "ativo", since: "mar/2026", kwh30d: 388, monthlyFee: 375 },
-  { name: "Bruno T.", planId: "pro", status: "ativo", since: "jan/2026", kwh30d: 502, monthlyFee: 375 },
-  { name: "Diego R.", planId: "pro", status: "ativo", since: "maio/2026", kwh30d: 311, monthlyFee: 375 },
-  { name: "Ana Paula", planId: "pro", status: "ativo", since: "abr/2026", kwh30d: 274, monthlyFee: 375 },
-  { name: "Lucas F.", planId: "pro", status: "inadimplente", since: "dez/2025", kwh30d: 421, monthlyFee: 375 },
-  { name: "Sofia M.", planId: "pro", status: "cancelado", since: "ago/2026", kwh30d: 0, monthlyFee: 375 },
+  { name: "Mariana S.", planId: "pro", status: "ativo", since: "mar/2026", kwh30d: 168, monthlyFee: 374.99 },
+  { name: "Rafael M.", planId: "pro", status: "ativo", since: "jan/2026", kwh30d: 214, monthlyFee: 374.99 },
+  { name: "Juliana P.", planId: "pro", status: "ativo", since: "abr/2026", kwh30d: 92, monthlyFee: 374.99 },
+  { name: "Patrícia L.", planId: "pro", status: "ativo", since: "fev/2026", kwh30d: 245, monthlyFee: 374.99 },
+  { name: "Thiago B.", planId: "pro", status: "ativo", since: "jun/2026", kwh30d: 61, monthlyFee: 374.99 },
+  { name: "Fernanda C.", planId: "pro", status: "inadimplente", since: "nov/2025", kwh30d: 187, monthlyFee: 374.99 },
+  { name: "Carlos A.", planId: "pro", status: "ativo", since: "mar/2026", kwh30d: 388, monthlyFee: 374.99 },
+  { name: "Bruno T.", planId: "pro", status: "ativo", since: "jan/2026", kwh30d: 502, monthlyFee: 374.99 },
+  { name: "Diego R.", planId: "pro", status: "ativo", since: "maio/2026", kwh30d: 311, monthlyFee: 374.99 },
+  { name: "Ana Paula", planId: "pro", status: "ativo", since: "abr/2026", kwh30d: 274, monthlyFee: 374.99 },
+  { name: "Lucas F.", planId: "pro", status: "inadimplente", since: "dez/2025", kwh30d: 421, monthlyFee: 374.99 },
+  { name: "Sofia M.", planId: "pro", status: "cancelado", since: "ago/2026", kwh30d: 0, monthlyFee: 374.99 },
 ];
 
 
@@ -361,7 +408,7 @@ export const TELEMETRY_30D: DayPoint[] = [
 /** Converte hora decimal pra minutos desde a meia-noite. */
 export const toMinutes = (decimalHour: number) => Math.round(decimalHour * 60);
 
-/** Faixas permitidas pra reserva NOTURNA em AC:
+/** Faixas permitidas pra reserva NOTURNA em AC (Pro):
  *  - dropHour entre 18:00 e 06:00 (atravessa meia-noite)
  *  - pickupHour entre 06:00 e 09:00 do dia seguinte
  *  - duração mínima 1h, máxima 15h
@@ -371,7 +418,7 @@ export const NIGHT_DROP_HOURS: number[] = [
 ];
 export const NIGHT_PICKUP_HOURS: number[] = [6, 7, 8, 9];
 
-/** Faixas permitidas pra reserva DIURNA (AC ou DC):
+/** Faixas permitidas pra reserva DIURNA (Pro) em AC ou DC:
  *  - dropHour entre 06:00 e 18:00
  *  - duração: AC 30min a 4h, DC 15min a 2h
  */
@@ -398,6 +445,10 @@ export const TOLERANCE_MIN = 15;
 
 /** taxa de ociosidade, R$ por minuto excedente (§ doc) */
 export const IDLE_FEE_PER_MIN = 0.5;
+
+/** Janela de antecedência mínima (em horas) exigida para criar reserva no Pro.
+ *  Reservas com menos antecedência sao rejeitadas. */
+export const PRO_MIN_ADVANCE_HOURS = 2;
 
 export function isNight(decimalHour: number) {
   return decimalHour >= 21 || decimalHour < 7;

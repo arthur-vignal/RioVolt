@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Shell } from "@/app/(app)/layout-client";
-import { PLANS, PLAN_BY_ID, type PlanId } from "@/lib/mock-data";
+import { PLANS, PLAN_BY_ID, type PlanId, FREE_KWH_RATE } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -12,6 +12,8 @@ import {
   AlertCircle,
   TrendingUp,
   BatteryCharging,
+  Check,
+  X,
 } from "lucide-react";
 
 const brl = (n: number) =>
@@ -34,8 +36,7 @@ function PlanCard({
   id: PlanId;
   current: string;
 }) {
-  const p = PLAN_BY_ID[id] ?? PLAN_BY_ID.pro;
-  // Banco legado pode ter planId="noturno" — alias pra Pro.
+  const p = PLAN_BY_ID[id];
   const isCurrent = p.id === (current === "noturno" ? "pro" : current);
 
   return (
@@ -61,26 +62,43 @@ function PlanCard({
 
       <div className="mt-4 flex items-baseline gap-1.5">
         <span className="text-[28px] font-semibold tabular-nums tracking-tight sm:text-3xl">
-          {brl(p.monthlyFee)}
+          {p.monthlyFee === 0 ? "Grátis" : brl(p.monthlyFee)}
         </span>
-        <span className="text-[13px] text-black/60">/mês</span>
+        {p.monthlyFee > 0 && <span className="text-[13px] text-black/60">/mês</span>}
       </div>
 
-      <div className="mt-3 space-y-2 rounded-[6px] border border-black/10 bg-[#f7f8f6]/40 p-3 text-[13px]">
-        <div className="flex justify-between">
-          <span className="text-black/70">Franquia</span>
-          <span className="tabular-nums font-medium">{p.includedKwh} kWh</span>
+      {p.includedKwh !== null ? (
+        <div className="mt-3 space-y-2 rounded-[6px] border border-black/10 bg-[#f7f8f6]/40 p-3 text-[13px]">
+          <div className="flex justify-between">
+            <span className="text-black/70">Franquia</span>
+            <span className="tabular-nums font-medium">{p.includedKwh} kWh</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-black/70">Tipo de uso</span>
+            <span className="font-medium">AC ou DC</span>
+          </div>
         </div>
-        <div className="flex justify-between">
-          <span className="text-black/70">Excedente</span>
-          <span className="tabular-nums font-medium">{brl(p.overageRate)}/kWh</span>
+      ) : (
+        <div className="mt-3 space-y-2 rounded-[6px] border border-black/10 bg-[#f7f8f6]/40 p-3 text-[13px]">
+          <div className="flex justify-between">
+            <span className="text-black/70">Tarifa AC</span>
+            <span className="tabular-nums font-medium">{brl(FREE_KWH_RATE.AC)}/kWh</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-black/70">Tarifa DC</span>
+            <span className="tabular-nums font-medium">{brl(FREE_KWH_RATE.DC)}/kWh</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-black/70">Taxa de retirada</span>
+            <span className="tabular-nums font-medium">{brl(p.reservationFee)}</span>
+          </div>
         </div>
-      </div>
+      )}
 
       <ul className="mt-4 space-y-2">
         {p.perks.map((perk, i) => (
           <li key={i} className="flex items-start gap-2 text-[13px] text-black/85">
-            <span className="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[#16a34a]" />
+            <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#16a34a]" />
             {perk}
           </li>
         ))}
@@ -144,7 +162,9 @@ export default function AssinaturaPage() {
     );
   }
 
-  const current = PLAN_BY_ID[(sub.planId === "noturno" ? "pro" : sub.planId) as PlanId] ?? PLAN_BY_ID.pro;
+  const currentPlanId =
+    sub.planId === "noturno" ? "pro" : ((sub.planId as PlanId) ?? "free");
+  const current = PLAN_BY_ID[currentPlanId];
   const over = Math.max(0, kwh - (current.includedKwh ?? 0));
   const pct = Math.min(
     100,
@@ -156,74 +176,77 @@ export default function AssinaturaPage() {
       <div className="mx-auto max-w-[1200px]">
         <h1 className="text-[22px] font-semibold tracking-tight sm:text-[28px]">Assinatura</h1>
         <p className="mt-1.5 text-[13px] text-black/70 sm:text-[14px]">
-          Plano {current.name} desde {sub.since} · próxima cobrança em {sub.nextRenewal}
+          Plano {current.name} desde {sub.since}
+          {current.monthlyFee > 0 ? ` · próxima cobrança em ${sub.nextRenewal}` : ""}
         </p>
 
         <div className="mt-5 grid gap-4 lg:gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
           {/* Coluna esquerda */}
           <div className="flex flex-col gap-4">
-            <section className="ev-card rounded-[6px] border border-black/10 p-4 sm:p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[12px] font-medium text-black/70">
-                    Consumo do ciclo
-                  </p>
-                  <div className="mt-1.5 flex items-baseline gap-2">
-                    <span className="text-[28px] font-semibold tabular-nums sm:text-3xl">
-                      {kwh}
-                    </span>
-                    <span className="text-[13px] text-black/70 sm:text-[14px]">
-                      / {current.includedKwh} kWh
-                    </span>
+            {current.includedKwh !== null && (
+              <section className="ev-card rounded-[6px] border border-black/10 p-4 sm:p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[12px] font-medium text-black/70">
+                      Consumo do ciclo
+                    </p>
+                    <div className="mt-1.5 flex items-baseline gap-2">
+                      <span className="text-[28px] font-semibold tabular-nums sm:text-3xl">
+                        {kwh}
+                      </span>
+                      <span className="text-[13px] text-black/70 sm:text-[14px]">
+                        / {current.includedKwh} kWh
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <span
-                  className={cn(
-                    "shrink-0 rounded-[6px] border px-2.5 py-1 text-[11px] font-medium",
-                    over > 0
-                      ? "border-busy/30 bg-busy/10 text-busy"
-                      : "border-[#16a34a]/30 bg-[#16a34a]/10 text-[#16a34a]",
-                  )}
-                >
-                  {over > 0 ? `${over} kWh excedente` : "Dentro da franquia"}
-                </span>
-              </div>
-
-              <Progress value={pct} className="mt-4 h-2" />
-              <p className="mt-2 text-[11px] text-black/60">
-                {pct}% da franquia consumida
-              </p>
-
-              <input
-                type="range"
-                min={0}
-                max={Math.round((current.includedKwh ?? 200) * 1.8)}
-                value={kwh}
-                onChange={(e) => setKwh(Number(e.target.value))}
-                className="mt-3 w-full accent-[#16a34a]"
-                aria-label="Simular consumo em kWh"
-              />
-
-              <div className="mt-4 grid grid-cols-2 gap-3 border-t border-black/10 pt-4 text-[13px]">
-                <div>
-                  <p className="text-black/70">Mensalidade</p>
-                  <p className="mt-0.5 text-[15px] font-semibold tabular-nums sm:text-base">
-                    {brl(current.monthlyFee)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-black/70">Excedente</p>
-                  <p
+                  <span
                     className={cn(
-                      "mt-0.5 text-[15px] font-semibold tabular-nums sm:text-base",
-                      over > 0 ? "text-busy" : "text-black/40",
+                      "shrink-0 rounded-[6px] border px-2.5 py-1 text-[11px] font-medium",
+                      over > 0
+                        ? "border-busy/30 bg-busy/10 text-busy"
+                        : "border-[#16a34a]/30 bg-[#16a34a]/10 text-[#16a34a]",
                     )}
                   >
-                    {over > 0 ? brl(over * current.overageRate) : "—"}
-                  </p>
+                    {over > 0 ? `${over} kWh excedente` : "Dentro da franquia"}
+                  </span>
                 </div>
-              </div>
-            </section>
+
+                <Progress value={pct} className="mt-4 h-2" />
+                <p className="mt-2 text-[11px] text-black/60">
+                  {pct}% da franquia consumida
+                </p>
+
+                <input
+                  type="range"
+                  min={0}
+                  max={Math.round((current.includedKwh ?? 200) * 1.8)}
+                  value={kwh}
+                  onChange={(e) => setKwh(Number(e.target.value))}
+                  className="mt-3 w-full accent-[#16a34a]"
+                  aria-label="Simular consumo em kWh"
+                />
+
+                <div className="mt-4 grid grid-cols-2 gap-3 border-t border-black/10 pt-4 text-[13px]">
+                  <div>
+                    <p className="text-black/70">Mensalidade</p>
+                    <p className="mt-0.5 text-[15px] font-semibold tabular-nums sm:text-base">
+                      {brl(current.monthlyFee)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-black/70">Excedente</p>
+                    <p
+                      className={cn(
+                        "mt-0.5 text-[15px] font-semibold tabular-nums sm:text-base",
+                        over > 0 ? "text-busy" : "text-black/40",
+                      )}
+                    >
+                      {over > 0 ? brl(over * current.overageRate) : "—"}
+                    </p>
+                  </div>
+                </div>
+              </section>
+            )}
 
             <section className="ev-card rounded-[6px] border border-black/10 p-4 sm:p-5">
               <div className="flex items-center gap-2">
@@ -237,8 +260,8 @@ export default function AssinaturaPage() {
                   </p>
                   <p className="mt-0.5 text-[11px] text-black/70 sm:text-[12px]">
                     {batteryKwh
-                      ? "Cada reserva desconta esse valor da franquia."
-                      : "kWh só é cobrado depois que você cadastrar."}
+                      ? "Cada reserva desconta esse valor da franquia (Pro)."
+                      : "Cadastre no perfil pra reservar."}
                   </p>
                 </div>
                 <Link
@@ -259,7 +282,9 @@ export default function AssinaturaPage() {
                 <div className="min-w-0">
                   <p className="text-[13px] font-medium sm:text-[14px]">Cartão de crédito •••• 4242</p>
                   <p className="mt-0.5 text-[11px] text-black/70 sm:text-[12px]">
-                    Cobrança automática recorrente
+                    {current.monthlyFee > 0
+                      ? "Cobrança automática recorrente"
+                      : "Sem cobrança de assinatura"}
                   </p>
                 </div>
                 <span
@@ -276,28 +301,23 @@ export default function AssinaturaPage() {
             </section>
           </div>
 
-          {/* Coluna direita — plano + alerta + CTA */}
+          {/* Coluna direita — 2 planos + alerta + CTA */}
           <div className="flex flex-col gap-4">
             <div className="grid gap-4 sm:grid-cols-2">
               {PLANS.map((p) => (
-                <PlanCard key={p.id} id={p.id} current={sub.planId} />
+                <PlanCard key={p.id} id={p.id} current={currentPlanId} />
               ))}
             </div>
 
-            <section className="rounded-[6px] border border-busy/25 bg-busy/[0.06] p-4">
-              <div className="flex items-start gap-2.5">
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-busy" />
-                <div className="text-[13px]">
-                  <p className="font-semibold text-black">
-                    Você está no {current.name}
-                  </p>
-                  <p className="mt-1 text-black/80">
-                    Excedente a{" "}
-                    <span className="font-semibold text-black">{brl(current.overageRate)}/kWh</span>{" "}
-                    acima da franquia de {current.includedKwh} kWh. Cobrança
-                    automática no cartão cadastrado.
-                  </p>
-                </div>
+            <section className="rounded-[6px] border border-black/10 bg-[#f7f8f6]/60 p-4">
+              <div className="flex items-start gap-2.5 text-[13px]">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-black/55" />
+                <p className="text-black/75">
+                  Você está no <strong>{current.name}</strong>.{" "}
+                  {current.monthlyFee > 0
+                    ? `Franquia de ${current.includedKwh} kWh inclusa; excedente a R$ ${current.overageRate.toFixed(2).replace(".", ",")}/kWh.`
+                    : `Tarifa padrão: R$ ${FREE_KWH_RATE.AC.toFixed(2).replace(".", ",")}/kWh AC ou R$ ${FREE_KWH_RATE.DC.toFixed(2).replace(".", ",")}/kWh DC. Taxa fixa de R$ ${current.reservationFee.toFixed(2).replace(".", ",")} cobrada na retirada.`}
+                </p>
               </div>
             </section>
 

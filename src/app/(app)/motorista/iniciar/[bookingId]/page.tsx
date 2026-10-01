@@ -184,6 +184,7 @@ export default function IniciarCargaPage({
 
   const liveAmount = useMemo(() => {
     if (!plan) return 0;
+    if (plan.includedKwhRate === null) return 0;
     return Math.round(liveKwh * plan.includedKwhRate * 100) / 100;
   }, [liveKwh, plan]);
 
