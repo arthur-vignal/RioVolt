@@ -70,20 +70,25 @@ function ReservarContent() {
           setProfile({
             batteryKwh: data.profile.batteryKwh ?? null,
             carModelId: data.profile.carModelId ?? null,
-            plan: "pro", // sempre Pro agora (free não tem cadastro)
+            // Sem subscription explicita ainda -> default "free".
+            // O fetch de /api/me/subscription abaixo sobrescreve se houver.
+            plan: "free",
           });
         }
       })
       .catch(() => undefined);
 
-    // Pega plano do usuario via /api/me/subscription
+    // Pega plano do usuario via /api/me/subscription. A API agora
+    // retorna sempre um DTO explicito (FREE_PLAN_DTO se nao tem
+    // assinatura), entao usamos direto o que vem.
     fetch("/api/me/subscription", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (data?.subscription?.planId) {
+        const planId = data?.subscription?.planId;
+        if (planId === "free" || planId === "pro") {
           setProfile((prev) => ({
             ...(prev ?? { batteryKwh: null, carModelId: null }),
-            plan: data.subscription.planId,
+            plan: planId,
           }));
         }
       })
@@ -392,9 +397,11 @@ function ReservarContent() {
                       <span className="rounded-[6px] border border-black/10 bg-white px-2 py-0.5 text-[10px] text-black/70">
                         {freeCount} livres
                       </span>
-                      <span className="rounded-[6px] border border-black/10 bg-white px-2 py-0.5 text-[10px] text-black/70">
-                        AC 22kW
-                      </span>
+                      {p.connectors.length > 0 ? (
+                        <span className="rounded-[6px] border border-black/10 bg-white px-2 py-0.5 text-[10px] text-black/70">
+                          {p.connectors[0].kind} {p.connectors[0].powerKw}kW
+                        </span>
+                      ) : null}
                     </div>
                   </button>
                 );
@@ -571,9 +578,9 @@ function ReservarContent() {
               <p className="text-black/70">
                 Taxa de reserva:{" "}
                 <span className="font-semibold text-black">
-                  {reservationFee === 0
-                    ? "Grátis (Pro incluso)"
-                    : `R$ ${reservationFee.toFixed(2).replace(".", ",")} (cobrada na retirada)`}
+                  {plan === "pro"
+                    ? "Grátis"
+                    : `R$ ${reservationFee.toFixed(2).replace(".", ",")} + kWh (cobrada na retirada)`}
                 </span>
               </p>
               <p className="text-black/70">
@@ -583,7 +590,14 @@ function ReservarContent() {
                     ? kwhToCharge !== null
                       ? `${kwhToCharge} kWh da franquia`
                       : "Bateria não cadastrada"
-                    : `Tarifa padrão: R$ 2,00/kWh AC · R$ 2,70/kWh DC`}
+                    : (() => {
+                        const kind = compatibleConnectors[0]?.kind ?? "AC";
+                        const rate = kind === "DC" ? 2.7 : 2.0;
+                        const cost = kwhToCharge !== null ? kwhToCharge * rate : null;
+                        return kwhToCharge !== null && cost !== null
+                          ? `Tarifa padrão: R$ ${rate.toFixed(2).replace(".", ",")}/kWh (${kind}) · ${kwhToCharge} kWh ≈ R$ ${cost.toFixed(2).replace(".", ",")}`
+                          : `Tarifa padrão: R$ 2,00/kWh AC · R$ 2,70/kWh DC`;
+                      })()}
                 </span>
               </p>
             </div>

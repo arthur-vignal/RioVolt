@@ -56,7 +56,7 @@ export const POINTS: Point[] = [
     openHours: "06h às 22h",
     partner: "Shopping Rio Sul",
     connectors: [
-      { id: "h1c1", pointId: "h1", kind: "DC", modes: ["dia"], powerKw: 50, status: "in_use", currentCharge: { startedAt: Date.now() - 18 * 60 * 1000, kwhTarget: 60, kwhDelivered: 15 } },
+      { id: "h1c1", pointId: "h1", kind: "DC", modes: ["dia"], powerKw: 50, status: "free", currentCharge: null },
       { id: "h1c2", pointId: "h1", kind: "DC", modes: ["dia"], powerKw: 50, status: "free", currentCharge: null },
     ],
   },
@@ -72,7 +72,7 @@ export const POINTS: Point[] = [
     partner: "Shopping Leblon",
     connectors: [
       { id: "h2c1", pointId: "h2", kind: "DC", modes: ["dia"], powerKw: 50, status: "free", currentCharge: null },
-      { id: "h2c2", pointId: "h2", kind: "DC", modes: ["dia"], powerKw: 50, status: "reserved", currentCharge: null },
+      { id: "h2c2", pointId: "h2", kind: "DC", modes: ["dia"], powerKw: 50, status: "free", currentCharge: null },
     ],
   },
   // Hubs AC — noturno (moradores deixando carro) E diurno (recarga curta).
@@ -88,9 +88,9 @@ export const POINTS: Point[] = [
     partner: "gEpark",
     connectors: [
       { id: "h3c1", pointId: "h3", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
-      { id: "h3c2", pointId: "h3", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "in_use", currentCharge: { startedAt: Date.now() - 90 * 60 * 1000, kwhTarget: 44.9, kwhDelivered: 33 } },
+      { id: "h3c2", pointId: "h3", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
       { id: "h3c3", pointId: "h3", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
-      { id: "h3c4", pointId: "h3", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "reserved", currentCharge: null },
+      { id: "h3c4", pointId: "h3", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
       { id: "h3c5", pointId: "h3", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
       { id: "h3c6", pointId: "h3", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
       { id: "h3c7", pointId: "h3", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
@@ -110,7 +110,7 @@ export const POINTS: Point[] = [
     connectors: [
       { id: "h4c1", pointId: "h4", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
       { id: "h4c2", pointId: "h4", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
-      { id: "h4c3", pointId: "h4", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "in_use", currentCharge: { startedAt: Date.now() - 35 * 60 * 1000, kwhTarget: 26.8, kwhDelivered: 12.8 } },
+      { id: "h4c3", pointId: "h4", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
       { id: "h4c4", pointId: "h4", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
       { id: "h4c5", pointId: "h4", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
       { id: "h4c6", pointId: "h4", kind: "AC", modes: ["noite", "dia"], powerKw: 22, status: "free", currentCharge: null },
@@ -258,6 +258,21 @@ export const PLANS: Plan[] = [
 ];
 
 export const PLAN_BY_ID = Object.fromEntries(PLANS.map((p) => [p.id, p])) as Record<PlanId, Plan>;
+
+/**
+ * DTO default retornado pela API /me/subscription quando o usuario
+ * nao tem nenhuma assinatura ativa (assinatura deletada, expirada,
+ * ou nunca comprou). Eh um "free" virtual — UI mostra como Free.
+ */
+export const FREE_PLAN_DTO = {
+  planId: "free" as PlanId,
+  kwhUsed: 0,
+  monthlyFee: 0,
+  since: null,
+  nextRenewal: null,
+  paymentOk: true,
+  isFree: true,
+};
 
 // ---------------------------------------------------------------- regra de preço no plano Free
 
