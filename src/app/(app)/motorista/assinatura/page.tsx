@@ -7,13 +7,11 @@ import { PLANS, PLAN_BY_ID, type PlanId } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 import {
-  Check,
-  ArrowRight,
   Zap,
-  Moon,
   Wallet,
   AlertCircle,
   TrendingUp,
+  BatteryCharging,
 } from "lucide-react";
 
 const brl = (n: number) =>
@@ -27,10 +25,6 @@ type SubscriptionDTO = {
   since: string;
   nextRenewal: string;
   paymentOk: boolean;
-  cuponsACUsed: number;
-  cuponsACLimit: number;
-  tarifaEstacionamentoAC: number;
-  antecedenciaDias: number;
 };
 
 function PlanCard({
@@ -42,7 +36,6 @@ function PlanCard({
 }) {
   const p = PLAN_BY_ID[id];
   const isCurrent = p.id === current;
-  const Icon = p.connectorKind === "DC" ? Zap : Moon;
 
   return (
     <div
@@ -52,19 +45,9 @@ function PlanCard({
       )}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <span
-            className={cn(
-              "flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px]",
-              p.connectorKind === "DC" ? "bg-dc/12 text-dc" : "bg-ac/12 text-ac",
-            )}
-          >
-            <Icon className="h-5 w-5" strokeWidth={2} />
-          </span>
-          <div className="min-w-0">
-            <h3 className="text-[15px] font-semibold leading-tight">{p.name}</h3>
-            <p className="text-[12px] text-black/70">{p.audience}</p>
-          </div>
+        <div>
+          <h3 className="text-[15px] font-semibold leading-tight">{p.name}</h3>
+          <p className="mt-0.5 text-[12px] text-black/70">{p.audience}</p>
         </div>
         {isCurrent && (
           <span className="shrink-0 rounded-[6px] border border-[#16a34a]/30 bg-[#16a34a]/10 px-2.5 py-1 text-[11px] font-semibold text-[#16a34a]">
@@ -91,22 +74,12 @@ function PlanCard({
           <span className="text-black/70">Excedente</span>
           <span className="tabular-nums font-medium">{brl(p.overageRate)}/kWh</span>
         </div>
-        <div className="flex justify-between">
-          <span className="text-black/70">Janela</span>
-          <span className="font-medium">{p.window}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-black/70">Conector</span>
-          <span className="font-medium">
-            {p.connectorKind} {p.connectorKind === "DC" ? "30–60 kW" : "7–22 kW"}
-          </span>
-        </div>
       </div>
 
       <ul className="mt-4 space-y-2">
-        {p.perks.map((perk) => (
-          <li key={perk} className="flex items-start gap-2 text-[13px] text-black/85">
-            <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#16a34a]" />
+        {p.perks.map((perk, i) => (
+          <li key={i} className="flex items-start gap-2 text-[13px] text-black/85">
+            <span className="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[#16a34a]" />
             {perk}
           </li>
         ))}
@@ -118,6 +91,7 @@ function PlanCard({
 export default function AssinaturaPage() {
   const [sub, setSub] = useState<SubscriptionDTO | null | "loading">("loading");
   const [kwh, setKwh] = useState(0);
+  const [batteryKwh, setBatteryKwh] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -132,6 +106,15 @@ export default function AssinaturaPage() {
       .catch(() => {
         if (!cancelled) setSub(null);
       });
+
+    fetch("/api/profile", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        setBatteryKwh(data?.profile?.batteryKwh ?? null);
+      })
+      .catch(() => undefined);
+
     return () => {
       cancelled = true;
     };
@@ -151,15 +134,10 @@ export default function AssinaturaPage() {
     return (
       <Shell scope="motorista">
         <div className="mx-auto max-w-[1200px]">
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-[28px]">Assinatura</h1>
+          <h1 className="text-[22px] font-semibold tracking-tight sm:text-[28px]">Assinatura</h1>
           <p className="mt-1.5 text-[14px] text-black/70">
             Você ainda não tem um plano ativo.
           </p>
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            {PLANS.map((p) => (
-              <PlanCard key={p.id} id={p.id} current="noturno" />
-            ))}
-          </div>
         </div>
       </Shell>
     );
@@ -181,7 +159,7 @@ export default function AssinaturaPage() {
         </p>
 
         <div className="mt-5 grid gap-4 lg:gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-          {/* Coluna esquerda — estado do plano */}
+          {/* Coluna esquerda */}
           <div className="flex flex-col gap-4">
             <section className="ev-card rounded-[6px] border border-black/10 p-4 sm:p-5">
               <div className="flex items-start justify-between gap-3">
@@ -212,7 +190,7 @@ export default function AssinaturaPage() {
 
               <Progress value={pct} className="mt-4 h-2" />
               <p className="mt-2 text-[11px] text-black/60">
-                {pct}% da franquia consumida · slider pra simular o fechamento do mês
+                {pct}% da franquia consumida
               </p>
 
               <input
@@ -248,6 +226,31 @@ export default function AssinaturaPage() {
 
             <section className="ev-card rounded-[6px] border border-black/10 p-4 sm:p-5">
               <div className="flex items-center gap-2">
+                <BatteryCharging className="h-4 w-4 text-ac" />
+                <h2 className="text-[14px] font-semibold">Bateria do carro</h2>
+              </div>
+              <div className="mt-3 flex items-center justify-between rounded-[6px] border border-black/10 bg-[#f7f8f6]/40 p-3">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-medium sm:text-[14px]">
+                    {batteryKwh ? `${batteryKwh} kWh` : "Não cadastrada"}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-black/70 sm:text-[12px]">
+                    {batteryKwh
+                      ? "Cada reserva desconta esse valor da franquia."
+                      : "kWh só é cobrado depois que você cadastrar."}
+                  </p>
+                </div>
+                <Link
+                  href="/motorista/perfil"
+                  className="shrink-0 rounded-[6px] border border-black/10 bg-white px-3 py-1.5 text-[11px] font-medium hover:bg-black/5"
+                >
+                  {batteryKwh ? "Editar" : "Cadastrar"}
+                </Link>
+              </div>
+            </section>
+
+            <section className="ev-card rounded-[6px] border border-black/10 p-4 sm:p-5">
+              <div className="flex items-center gap-2">
                 <Wallet className="h-4 w-4 text-taken" />
                 <h2 className="text-[14px] font-semibold">Forma de pagamento</h2>
               </div>
@@ -270,54 +273,9 @@ export default function AssinaturaPage() {
                 </span>
               </div>
             </section>
-
-            {sub.cuponsACLimit > 0 && (
-              <section className="ev-card rounded-[6px] border border-black/10 p-4 sm:p-5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Zap className="h-4 w-4 text-ac" />
-                    <h2 className="text-[14px] font-semibold">
-                      Cupons AC neste ciclo
-                    </h2>
-                  </div>
-                  <span className="rounded-[6px] border border-black/10 bg-[#f7f8f6]/60 px-2.5 py-1 font-mono text-[12px] tabular-nums font-semibold">
-                    {sub.cuponsACUsed} / {sub.cuponsACLimit}
-                  </span>
-                </div>
-                <p className="mt-2 text-[12px] text-black/70 sm:text-[13px]">
-                  Cada reserva em vaga AC desconta 1 cupom de R${" "}
-                  {sub.tarifaEstacionamentoAC.toLocaleString("pt-BR", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}{" "}
-                  da tarifa de estacionamento.
-                </p>
-                <div className="mt-3 flex items-center gap-1.5">
-                  {Array.from({ length: sub.cuponsACLimit }).map((_, i) => {
-                    const used = i < sub.cuponsACUsed;
-                    return (
-                      <span
-                        key={i}
-                        className={cn(
-                          "h-2.5 flex-1 rounded-[6px]",
-                          used ? "bg-ac" : "bg-black/10",
-                        )}
-                      />
-                    );
-                  })}
-                </div>
-                <p className="mt-3 text-[12px] text-black/70 sm:text-[13px]">
-                  Antecedência máxima de reserva:{" "}
-                  <span className="font-semibold text-black">
-                    {sub.antecedenciaDias} dias
-                  </span>
-                  .
-                </p>
-              </section>
-            )}
           </div>
 
-          {/* Coluna direita — planos + alerta + CTA */}
+          {/* Coluna direita — plano + alerta + CTA */}
           <div className="flex flex-col gap-4">
             <div className="grid gap-4 sm:grid-cols-2">
               {PLANS.map((p) => (
@@ -330,13 +288,13 @@ export default function AssinaturaPage() {
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-busy" />
                 <div className="text-[13px]">
                   <p className="font-semibold text-black">
-                    Você está no {sub.planId === "noturno" ? "Noturno Garantido" : "Pro Plus 150"}
+                    Você está no {current.name}
                   </p>
                   <p className="mt-1 text-black/80">
                     Excedente a{" "}
                     <span className="font-semibold text-black">{brl(current.overageRate)}/kWh</span>{" "}
-                    acima da franquia de {current.includedKwh} kWh. Mudança de plano
-                    pode ser solicitada pelo suporte.
+                    acima da franquia de {current.includedKwh} kWh. Cobrança
+                    automática no cartão cadastrado.
                   </p>
                 </div>
               </div>

@@ -23,6 +23,7 @@ import {
   type PlanId,
   type ChargerKind,
   type PointStatus,
+  type ReservationMode,
 } from "@/lib/mock-data";
 
 // ---------------------------------------------------------------- singleton
@@ -79,6 +80,8 @@ export async function initSchema(): Promise<void> {
       plate           TEXT,
       car_model       TEXT,
       kwh_plan_limit  INTEGER,
+      battery_kwh     DOUBLE PRECISION,
+      car_model_id    TEXT,
       created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
@@ -100,7 +103,8 @@ export async function initSchema(): Promise<void> {
       kind        TEXT NOT NULL CHECK (kind IN ('AC','DC')),
       power_kw    DOUBLE PRECISION NOT NULL,
       status      TEXT NOT NULL CHECK (status IN ('free','reserved','in_use','offline')),
-      note        TEXT
+      note        TEXT,
+      modes       TEXT[] NOT NULL DEFAULT ARRAY['noite','dia']::TEXT[]
     );
 
     CREATE TABLE IF NOT EXISTS bookings (
@@ -109,7 +113,9 @@ export async function initSchema(): Promise<void> {
       connector_id  TEXT NOT NULL REFERENCES connectors(id) ON DELETE CASCADE,
       point_id      TEXT NOT NULL REFERENCES points(id) ON DELETE CASCADE,
       plan          TEXT NOT NULL CHECK (plan IN ('noturno','pro')),
-      start_hour    DOUBLE PRECISION NOT NULL,
+      mode          TEXT NOT NULL CHECK (mode IN ('noite','dia')),
+      drop_hour     DOUBLE PRECISION NOT NULL,
+      pickup_hour   DOUBLE PRECISION NOT NULL,
       duration_min  INTEGER NOT NULL,
       status        TEXT NOT NULL CHECK (status IN ('confirmed','pending','cancelled','no_show','done','in_progress')),
       created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -154,20 +160,74 @@ export async function initSchema(): Promise<void> {
     CREATE TABLE IF NOT EXISTS settings (
       key   TEXT PRIMARY KEY,
       value TEXT NOT NULL
-    );
+  );
 
-    INSERT INTO settings (key, value) VALUES ('kwhPrice', '2.04')
-      ON CONFLICT (key) DO NOTHING;
-    `);
-    // ensure default 'in_progress' exists in CHECK (post-migration safety)
+  INSERT INTO settings (key, value) VALUES ('kwhPrice', '2.04')
+    ON CONFLICT (key) DO NOTHING;
+  `);
+    // Migration idempotente: bancos criados antes das colunas battery_kwh /
+    // car_model_id serem adicionadas precisam de ALTER. Idempotente via
+    // ADD COLUMN IF NOT EXISTS. Se a tabela já tiver criado com a coluna nova
+    // (banco novo), o ALTER é no-op.
     await pool.query(`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM information_schema.table_constraints
-          WHERE constraint_name = 'bookings_status_check'
-        ) THEN
-          ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_status_check;
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS battery_kwh DOUBLE PRECISION;
+    `).catch((err) => {
+    console.error("[voltrio/db-pg] falha ao adicionar battery_kwh:", err instanceof Error ? err.message : err);
+    });
+    await pool.query(`
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS car_model_id TEXT;
+    `).catch((err) => {
+    console.error("[voltrio/db-pg] falha ao adicionar car_model_id:", err instanceof Error ? err.message : err);
+    });
+
+  // Migration idempotente: bookings em deploys antigos nao tem mode /
+  // drop_hour / pickup_hour. Adiciona colunas novas (com DEFAULT seguro
+  // pra nao quebrar reservas legadas). .catch tolera "already exists".
+  await pool.query(`
+    ALTER TABLE bookings
+      ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'noite';
+  `).catch((err) => {
+    console.error("[voltrio/db-pg] falha ao adicionar bookings.mode:", err instanceof Error ? err.message : err);
+  });
+  await pool.query(`
+    ALTER TABLE bookings
+      ADD COLUMN IF NOT EXISTS drop_hour DOUBLE PRECISION NOT NULL DEFAULT 21;
+  `).catch((err) => {
+    console.error("[voltrio/db-pg] falha ao adicionar bookings.drop_hour:", err instanceof Error ? err.message : err);
+  });
+  await pool.query(`
+    ALTER TABLE bookings
+      ADD COLUMN IF NOT EXISTS pickup_hour DOUBLE PRECISION NOT NULL DEFAULT 31;
+  `).catch((err) => {
+    console.error("[voltrio/db-pg] falha ao adicionar bookings.pickup_hour:", err instanceof Error ? err.message : err);
+  });
+  // Relaxa constraint do CHECK pra aceitar 'noite' alem de 'noturno' (legado)
+  await pool.query(`
+    ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_mode_check;
+    ALTER TABLE bookings ADD CONSTRAINT bookings_mode_check
+      CHECK (mode IN ('noturno','noite','dia'));
+  `).catch((err) => {
+    console.error("[voltrio/db-pg] falha ao ajustar bookings.mode check:", err instanceof Error ? err.message : err);
+  });
+  // Connectors: adicionar modes se nao tiver (banco antigo nao tem)
+  await pool.query(`
+    ALTER TABLE connectors
+      ADD COLUMN IF NOT EXISTS modes TEXT[] NOT NULL DEFAULT ARRAY['noite','dia']::TEXT[];
+  `).catch((err) => {
+    console.error("[voltrio/db-pg] falha ao adicionar connectors.modes:", err instanceof Error ? err.message : err);
+  });
+
+  // ensure default 'in_progress' exists in CHECK (post-migration safety)
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'bookings_status_check'
+      ) THEN
+        ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_status_check;
           ALTER TABLE bookings ADD CONSTRAINT bookings_status_check
             CHECK (status IN ('confirmed','pending','cancelled','no_show','done','in_progress'));
         END IF;
@@ -213,8 +273,8 @@ export async function seedIfEmpty(): Promise<void> {
       { id: "owner-1", email: "dono@voltrio.app", role: "donos", name: "Bruno Tavares", plate: null, car: null, plan: null },
     ]) {
       await tx.query(
-        `INSERT INTO users (id,email,role,name,plate,car_model,kwh_plan_limit)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        `INSERT INTO users (id,email,role,name,plate,car_model,kwh_plan_limit,battery_kwh,car_model_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
         [u.id, u.email, u.role, u.name, u.plate, u.car, u.plan],
       );
     }
@@ -226,9 +286,9 @@ export async function seedIfEmpty(): Promise<void> {
       );
       for (const c of p.connectors) {
         await tx.query(
-          `INSERT INTO connectors (id,point_id,kind,power_kw,status,note)
-           VALUES ($1,$2,$3,$4,$5,$6)`,
-          [c.id, p.id, c.kind, c.powerKw, c.status, c.note ?? null],
+          `INSERT INTO connectors (id,point_id,kind,power_kw,status,note,modes)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [c.id, p.id, c.kind, c.powerKw, c.status, c.note ?? null, c.modes],
         );
       }
     }
@@ -268,6 +328,8 @@ export type UserRow = {
   plate: string | null;
   car_model: string | null;
   kwh_plan_limit: number | null;
+  battery_kwh: number | null;
+  car_model_id: string | null;
   created_at: string;
 };
 
@@ -290,6 +352,8 @@ export type Profile = {
   role: "motorista" | "donos";
   plate: string;
   vehicle: string;
+  batteryKwh: number | null;
+  carModelId: string | null;
 };
 
 // ---------------------------------------------------------------- mappers
@@ -313,6 +377,7 @@ type ConnectorRow = {
   power_kw: number;
   status: PointStatus;
   note: string | null;
+  modes: string[] | null;
 };
 
 type BookingRow = {
@@ -321,7 +386,9 @@ type BookingRow = {
   connector_id: string;
   point_id: string;
   plan: PlanId;
-  start_hour: number;
+  mode: ReservationMode;
+  drop_hour: number;
+  pickup_hour: number;
   duration_min: number;
   status: Booking["status"];
   created_at: string;
@@ -346,6 +413,12 @@ function rowToConnector(r: ConnectorRow): Connector {
     powerKw: Number(r.power_kw),
     status: r.status,
     note: r.note ?? undefined,
+    modes:
+      r.modes && r.modes.length > 0
+        ? (r.modes as Connector["modes"])
+        : r.kind === "DC"
+          ? ["dia"]
+          : ["noite", "dia"],
   };
 }
 
@@ -379,7 +452,9 @@ async function rowToBooking(r: BookingRow): Promise<Booking> {
     pointId: r.point_id,
     user: userName,
     planId: r.plan,
-    start: Number(r.start_hour),
+    mode: r.mode,
+    dropHour: Number(r.drop_hour),
+    pickupHour: Number(r.pickup_hour),
     durationMin: r.duration_min,
     status: r.status,
   };
@@ -476,15 +551,17 @@ export type CreateUserInput = {
   plate: string | null;
   car_model: string | null;
   kwh_plan_limit: number | null;
+  battery_kwh: number | null;
+  car_model_id: string | null;
 };
 
 export async function createUser(input: CreateUserInput): Promise<UserRow> {
   await getPool().query(
-    `INSERT INTO users (id, email, role, name, plate, car_model, kwh_plan_limit)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO users (id, email, role, name, plate, car_model, kwh_plan_limit, battery_kwh, car_model_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      ON CONFLICT (email) DO NOTHING
      RETURNING *`,
-    [input.id, input.email, input.role, input.name, input.plate, input.car_model, input.kwh_plan_limit],
+    [input.id, input.email, input.role, input.name, input.plate, input.car_model, input.kwh_plan_limit, input.battery_kwh, input.car_model_id],
   );
   // se conflict, retorna o existente
   const existing = await findUserByEmail(input.email);
@@ -522,12 +599,20 @@ export async function getProfile(userId: string): Promise<Profile | undefined> {
     role: u.role,
     plate: u.plate ?? "",
     vehicle: u.car_model ?? "",
+    batteryKwh: u.battery_kwh != null ? Number(u.battery_kwh) : null,
+    carModelId: u.car_model_id ?? null,
   };
 }
 
 export async function updateProfile(
   userId: string,
-  patch: { name?: string; plate?: string; vehicle?: string },
+  patch: {
+    name?: string;
+    plate?: string;
+    vehicle?: string;
+    batteryKwh?: number | null;
+    carModelId?: string | null;
+  },
 ): Promise<Profile | undefined> {
   if (typeof patch.name === "string") {
     await getPool().query("UPDATE users SET name = $1 WHERE id = $2", [patch.name, userId]);
@@ -542,6 +627,18 @@ export async function updateProfile(
     await getPool().query(
       "UPDATE users SET car_model = $1 WHERE id = $2",
       [patch.vehicle, userId],
+    );
+  }
+  if (typeof patch.carModelId !== "undefined") {
+    await getPool().query(
+      "UPDATE users SET car_model_id = $1 WHERE id = $2",
+      [patch.carModelId, userId],
+    );
+  }
+  if (typeof patch.batteryKwh !== "undefined") {
+    await getPool().query(
+      "UPDATE users SET battery_kwh = $1 WHERE id = $2",
+      [patch.batteryKwh, userId],
     );
   }
   return getProfile(userId);
@@ -631,71 +728,85 @@ export async function createBooking(input: {
   userId: string;
   connectorId: string;
   plan: PlanId;
-  startHour: number;
-  durationMin: number;
+  mode: ReservationMode;
+  dropHour: number;
+  pickupHour: number;
 }): Promise<Booking> {
   const pool = getPool();
-  const end = input.startHour + input.durationMin / 60;
+  if (!Number.isFinite(input.dropHour) || !Number.isFinite(input.pickupHour)) {
+    throw new Error("invalid_hours");
+  }
+  if (input.pickupHour <= input.dropHour) {
+    throw new Error("pickup_before_drop");
+  }
+  const durationMin = Math.round((input.pickupHour - input.dropHour) * 60);
+
   const conflict = await pool.query(
     `SELECT id FROM bookings
      WHERE connector_id = $1
        AND status IN ('confirmed','pending','in_progress')
-       AND NOT (start_hour + (duration_min / 60.0) <= $2 OR start_hour >= $3)`,
-    [input.connectorId, input.startHour, end],
+       AND NOT (drop_hour + (duration_min / 60.0) <= $2 OR drop_hour >= $3)`,
+    [input.connectorId, input.dropHour, input.pickupHour],
   );
   if (conflict.rows.length > 0) throw new Error(`connector_busy:${input.connectorId}`);
 
-  const connRow = await pool.query<{ point_id: string; kind: ChargerKind }>(
-    "SELECT c.point_id, c.kind FROM connectors c WHERE c.id = $1",
+  const connRow = await pool.query<{
+    point_id: string;
+    kind: ChargerKind;
+    modes: ReservationMode[] | null;
+  }>(
+    "SELECT c.point_id, c.kind, c.modes FROM connectors c WHERE c.id = $1",
     [input.connectorId],
   );
-  const pointId = connRow.rows[0]?.point_id;
-  if (!pointId) throw new Error(`connector_not_found:${input.connectorId}`);
-  const connectorKind = connRow.rows[0]?.kind;
+  const conn = connRow.rows[0];
+  if (!conn) throw new Error(`connector_not_found:${input.connectorId}`);
+  const connectorModes =
+    conn.modes && conn.modes.length > 0
+      ? conn.modes
+      : conn.kind === "DC"
+        ? ["dia"]
+        : ["noite", "dia"];
+  if (!connectorModes.includes(input.mode)) {
+    throw new Error(`mode_not_supported:${input.mode}`);
+  }
 
-  // Regra Pro Plus 150: cada reserva em conector AC consome 1 cupom de R$20
-  // (isencao da tarifa de estacionamento). Limite mensal: 6.
-  // DC nao consome cupom.
-  if (input.plan === "pro" && connectorKind === "AC") {
-    await ensureSchema();
-    const subR = await pool.query<{ id: number; cupons_ac_used: number; cycle_start: string }>(
-      `SELECT id, cupons_ac_used, cycle_start
-       FROM subscriptions WHERE user_id = $1
-       ORDER BY id DESC LIMIT 1`,
-      [input.userId],
-    );
-    const sub = subR.rows[0];
-    if (!sub) throw new Error("cupons_no_subscription");
-    const cycleStart = new Date(sub.cycle_start);
-    const now = new Date();
-    const sameCycle =
-      cycleStart.getUTCFullYear() === now.getUTCFullYear() &&
-      cycleStart.getUTCMonth() === now.getUTCMonth();
-    const used = sameCycle ? Number(sub.cupons_ac_used) : 0;
-    if (used >= 6) {
-      throw new Error("cupons_ac_esgotados");
+  const dropMin = Math.round(input.dropHour * 60) % (24 * 60);
+  const pickupMin = Math.round(input.pickupHour * 60) % (24 * 60);
+  if (input.mode === "noite") {
+    const dropOk = dropMin >= 18 * 60 || dropMin <= 6 * 60;
+    if (!dropOk) throw new Error("drop_out_of_night_window");
+    if (pickupMin < 6 * 60 || pickupMin > 9 * 60) {
+      throw new Error("pickup_out_of_night_window");
     }
-    if (!sameCycle) {
-      // reseta cycle_start + cupons ao iniciar novo ciclo
-      await pool.query(
-        `UPDATE subscriptions
-            SET cycle_start = date_trunc('month', now()),
-                cupons_ac_used = 0
-          WHERE id = $1`,
-        [sub.id],
-      );
+    if (durationMin < 60 || durationMin > 15 * 60) {
+      throw new Error("night_duration_out_of_range");
     }
-    await pool.query(
-      "UPDATE subscriptions SET cupons_ac_used = cupons_ac_used + 1 WHERE id = $1",
-      [sub.id],
-    );
+  } else {
+    if (dropMin < 6 * 60 || dropMin > 18 * 60) {
+      throw new Error("drop_out_of_day_window");
+    }
+    const maxDur = conn.kind === "DC" ? 2 * 60 : 4 * 60;
+    const minDur = conn.kind === "DC" ? 15 : 30;
+    if (durationMin < minDur || durationMin > maxDur) {
+      throw new Error("day_duration_out_of_range");
+    }
   }
 
   const id = `b-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
   await pool.query(
-    `INSERT INTO bookings (id,user_id,connector_id,point_id,plan,start_hour,duration_min,status)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,'confirmed')`,
-    [id, input.userId, input.connectorId, pointId, input.plan, input.startHour, input.durationMin],
+    `INSERT INTO bookings (id,user_id,connector_id,point_id,plan,mode,drop_hour,pickup_hour,duration_min,status)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'confirmed')`,
+    [
+      id,
+      input.userId,
+      input.connectorId,
+      conn.point_id,
+      input.plan,
+      input.mode,
+      input.dropHour,
+      input.pickupHour,
+      durationMin,
+    ],
   );
   await pool.query("UPDATE connectors SET status = 'reserved' WHERE id = $1", [input.connectorId]);
   const r = await pool.query<BookingRow>("SELECT * FROM bookings WHERE id = $1", [id]);
@@ -965,15 +1076,17 @@ export async function createReservation(input: {
   pointId: string;
   connectorId: string;
   planId: PlanId;
-  start: number;
-  durationMin: number;
+  mode: ReservationMode;
+  dropHour: number;
+  pickupHour: number;
 }): Promise<Booking> {
   return createBooking({
     userId: input.userId,
     connectorId: input.connectorId,
     plan: input.planId,
-    startHour: input.start,
-    durationMin: input.durationMin,
+    mode: input.mode,
+    dropHour: input.dropHour,
+    pickupHour: input.pickupHour,
   });
 }
 

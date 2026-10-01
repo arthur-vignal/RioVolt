@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Shell } from "@/app/(app)/layout-client";
 import { useAppAuth } from "@/lib/providers";
 import { ChargeHistory } from "@/components/charge-history";
+import { CAR_MODELS, carModelById } from "@/lib/mock-data";
 import {
   Car,
   LogOut,
@@ -13,6 +14,7 @@ import {
   ShieldCheck,
   UserCircle2,
   X,
+  BatteryCharging,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +25,8 @@ type Profile = {
   role: "motorista" | "donos";
   plate: string;
   vehicle: string;
+  batteryKwh: number | null;
+  carModelId: string | null;
 };
 
 const ROLE_LABEL: Record<Profile["role"], string> = {
@@ -38,6 +42,8 @@ export default function PerfilPage() {
   const [plate, setPlate] = useState("");
   const [vehicle, setVehicle] = useState("");
   const [name, setName] = useState("");
+  const [carModelId, setCarModelId] = useState("");
+  const [customBatteryKwh, setCustomBatteryKwh] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,6 +64,18 @@ export default function PerfilPage() {
       setPlate(json.profile.plate);
       setVehicle(json.profile.vehicle);
       setName(json.profile.name);
+      setCarModelId(json.profile.carModelId ?? "");
+      // Se batteryKwh difere do modelo cadastrado, exibe como custom.
+      if (json.profile.carModelId && json.profile.carModelId !== "outro") {
+        const m = carModelById(json.profile.carModelId);
+        if (m && m.batteryKwh === json.profile.batteryKwh) {
+          setCustomBatteryKwh("");
+        } else if (json.profile.batteryKwh) {
+          setCustomBatteryKwh(String(json.profile.batteryKwh));
+        }
+      } else if (json.profile.batteryKwh) {
+        setCustomBatteryKwh(String(json.profile.batteryKwh));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "erro");
     } finally {
@@ -73,6 +91,21 @@ export default function PerfilPage() {
     setSaving(true);
     setError(null);
     try {
+      // Resolve batteryKwh a partir do modelo selecionado + custom input.
+      let batteryKwh: number | null = null;
+      let resolvedCarModelId: string | null = carModelId || null;
+      if (carModelId && carModelId !== "outro") {
+        const m = carModelById(carModelId);
+        if (m) batteryKwh = m.batteryKwh;
+      } else if (carModelId === "outro") {
+        const num = Number(customBatteryKwh.replace(",", "."));
+        if (Number.isFinite(num) && num > 0) batteryKwh = num;
+        // vehicle fica custom (livre digitação)
+      } else {
+        // sem modelo selecionado: tenta pegar do custom
+        const num = Number(customBatteryKwh.replace(",", "."));
+        if (Number.isFinite(num) && num > 0) batteryKwh = num;
+      }
       const res = await fetch("/api/profile", {
         method: "PUT",
         headers: { "content-type": "application/json" },
@@ -80,6 +113,8 @@ export default function PerfilPage() {
           name: name.trim(),
           plate: plate.trim().toUpperCase(),
           vehicle: vehicle.trim(),
+          carModelId: resolvedCarModelId,
+          batteryKwh,
         }),
       });
       if (!res.ok) {
@@ -174,6 +209,13 @@ export default function PerfilPage() {
                 label="Modelo"
                 value={profile.vehicle || "-"}
               />
+              <Row
+                icon={<BatteryCharging className="h-3.5 w-3.5" />}
+                label="Bateria"
+                value={
+                  profile.batteryKwh != null ? `${profile.batteryKwh} kWh` : "Não cadastrada"
+                }
+              />
             </dl>
 
             <button
@@ -234,12 +276,74 @@ export default function PerfilPage() {
                 placeholder="RIO-2A45"
                 mono
               />
-              <Field
-                label="Modelo do carro"
-                value={vehicle}
-                onChange={setVehicle}
-                placeholder="BYD Dolphin"
-              />
+              <label className="block">
+                <span className="block text-[12px] font-medium text-black/70">
+                  Modelo do carro
+                </span>
+                <select
+                  value={carModelId}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setCarModelId(v);
+                    // Auto-preencher vehicle + batteryKwh ao selecionar modelo conhecido
+                    if (v && v !== "outro") {
+                      const m = carModelById(v);
+                      if (m) {
+                        setVehicle(m.name);
+                        setCustomBatteryKwh(String(m.batteryKwh));
+                      }
+                    }
+                  }}
+                  className="mt-1 h-9 w-full rounded-[6px] border border-black/10 bg-white px-3 text-[13px] text-black focus:border-[#16a34a] focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30"
+                >
+                  <option value="">Selecione o modelo</option>
+                  {CAR_MODELS.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                      {m.id !== "outro" && "batteryKwh" in m
+                        ? ` (${m.batteryKwh} kWh)`
+                        : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {carModelId === "outro" ? (
+                <Field
+                  label="Modelo (digitar)"
+                  value={vehicle}
+                  onChange={setVehicle}
+                  placeholder="Ex.: Neta V"
+                />
+              ) : null}
+
+              <label className="block">
+                <span className="block text-[12px] font-medium text-black/70">
+                  Capacidade da bateria (kWh)
+                </span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.1"
+                  min={0}
+                  max={200}
+                  value={customBatteryKwh}
+                  onChange={(e) => setCustomBatteryKwh(e.target.value)}
+                  placeholder={carModelId && carModelId !== "outro"
+                    ? String(
+                        (carModelById(carModelId) as { batteryKwh?: number } | undefined)
+                          ?.batteryKwh ?? "",
+                      )
+                    : "Ex.: 60"}
+                  disabled={carModelId !== "" && carModelId !== "outro"}
+                  className="mt-1 h-9 w-full rounded-[6px] border border-black/10 bg-white px-3 text-[13px] text-black placeholder:text-black/40 focus:border-[#16a34a] focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30 disabled:bg-black/5 disabled:text-black/60"
+                />
+                <span className="mt-1 block text-[11px] text-black/55">
+                  {carModelId && carModelId !== "outro"
+                    ? "Pré-preenchido pelo modelo. Edite se tiver upgrade de bateria."
+                    : "Usado pra cobrar kWh do plano na conclusão da carga."}
+                </span>
+              </label>
             </div>
 
             {error ? (

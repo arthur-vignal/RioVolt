@@ -179,7 +179,7 @@ export default function IniciarCargaPage({
 
   const plan = useMemo(() => {
     if (!data) return null;
-    return PLAN_BY_ID[data.booking.planId];
+    return PLAN_BY_ID[data.booking.planId as keyof typeof PLAN_BY_ID] ?? PLAN_BY_ID.pro;
   }, [data]);
 
   const liveAmount = useMemo(() => {
@@ -280,10 +280,7 @@ export default function IniciarCargaPage({
               </p>
               {plan ? (
                 <p className="mt-0.5 inline-flex items-center gap-1.5 text-[12px] text-black/80">
-                  <Zap className="h-3 w-3" /> {plan.name} ·{" "}
-                  <span className="font-mono">
-                    {plan.connectorKind} {plan.connectorKind === "DC" ? "30–60 kW" : "7–22 kW"}
-                  </span>
+                  <Zap className="h-3 w-3" /> {plan.name} · 150 kWh inclusos
                 </p>
               ) : null}
             </div>

@@ -31,10 +31,21 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "Body inválido" }, { status: 400 });
   }
   const b = body as Record<string, unknown>;
-  const patch: { name?: string; plate?: string; vehicle?: string } = {};
+  const patch: {
+    name?: string;
+    plate?: string;
+    vehicle?: string;
+    carModelId?: string | null;
+    batteryKwh?: number | null;
+  } = {};
   if (typeof b.name === "string") patch.name = b.name.trim().slice(0, 80);
   if (typeof b.plate === "string") patch.plate = b.plate.trim().slice(0, 16);
   if (typeof b.vehicle === "string") patch.vehicle = b.vehicle.trim().slice(0, 80);
+  if (typeof b.carModelId === "string") patch.carModelId = b.carModelId.slice(0, 64);
+  if (b.batteryKwh === null) patch.batteryKwh = null;
+  if (typeof b.batteryKwh === "number" && Number.isFinite(b.batteryKwh)) {
+    patch.batteryKwh = Math.max(0, Math.min(200, b.batteryKwh));
+  }
 
   const profile = await updateProfile(userId, patch);
   return NextResponse.json({ profile });

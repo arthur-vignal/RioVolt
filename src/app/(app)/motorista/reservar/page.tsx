@@ -7,65 +7,152 @@ import { Shell } from "@/app/(app)/layout-client";
 import {
   POINTS,
   PLAN_BY_ID,
-  PLAN_WINDOW_LABEL,
-  BUFFER_MIN,
-  TOLERANCE_MIN,
-  IDLE_FEE_PER_MIN,
-  ME,
+  NIGHT_DROP_HOURS,
+  NIGHT_PICKUP_HOURS,
+  DAY_DROP_HOURS,
+  DAY_DURATIONS_MIN,
+  fmtHour,
   type PlanId,
+  type Point,
+  type ChargerKind,
+  type ReservationMode,
 } from "@/lib/mock-data";
-import { KindBadge } from "@/components/status";
 import { cn } from "@/lib/utils";
 import {
   ArrowLeft,
   Check,
   Clock,
   MapPin,
-  QrCode,
   ShieldCheck,
   Timer,
   AlertTriangle,
+  Moon,
+  Sun,
+  BatteryCharging,
 } from "lucide-react";
-
-const NIGHT_HOURS = [20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6];
-const DAY_HOURS = [6, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
-
-const fmt = (h: number) => `${String(h).padStart(2, "0")}h`;
 
 type Step = "escolher" | "confirmar" | "feito";
 
+type ProfileLite = {
+  batteryKwh: number | null;
+  carModelId: string | null;
+};
+
+function fmtNight(h: number): string {
+  // h pode passar de 24 (representa manhã do dia seguinte)
+  const norm = ((h % 24) + 24) % 24;
+  return fmtHour(norm);
+}
+
 function ReservarContent() {
   const params = useSearchParams();
-  // Plano do usuário vem do ME (mock) por enquanto. Nao tem seletor.
-  const plan = ME.planId as PlanId;
-  const [pointId, setPointId] = useState<string>(params.get("ponto") ?? "hub-1");
-  const defaultHour = plan === "noturno" ? 22 : 12;
-  const [hour, setHour] = useState<number>(
-    params.get("hora") ? Number(params.get("hora")) : defaultHour,
+  const [mode, setMode] = useState<ReservationMode>("noite");
+  const [pointId, setPointId] = useState<string>(params.get("ponto") ?? "hub-3");
+  const [dropHour, setDropHour] = useState<number>(mode === "noite" ? 21 : 12);
+  const [pickupHour, setPickupHour] = useState<number>(
+    mode === "noite" ? 7 + 24 : 12.75,
   );
   const [step, setStep] = useState<Step>("escolher");
-  const [weekday, setWeekday] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [profile, setProfile] = useState<ProfileLite | null>(null);
 
-  const point = useMemo(
-    () => POINTS.find((p) => p.id === pointId) ?? POINTS[0],
-    [pointId],
-  );
-  const current = PLAN_BY_ID[plan];
-  const hours = plan === "noturno" ? NIGHT_HOURS : DAY_HOURS;
-  const duration = plan === "noturno" ? 480 : 60;
-
-  const estimateKwh = plan === "noturno" ? 200 : 42;
-  const overEstimate = Math.max(0, estimateKwh - current.includedKwh!);
-  const overCost = overEstimate * current.overageRate;
-  const totalToday = current.monthlyFee + overCost;
-
-  // Garante que, ao mudar de ponto com hora invalida pra esse plano,
-  // a hora default volta pro plano atual. So pra caso o deep link
-  // aponte hora fora da janela.
+  // Busca perfil pra mostrar kWh da bateria (se cadastrado).
   useEffect(() => {
-    if (!hours.includes(hour)) setHour(defaultHour);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan]);
+    fetch("/api/profile", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.profile) {
+          setProfile({
+            batteryKwh: data.profile.batteryKwh ?? null,
+            carModelId: data.profile.carModelId ?? null,
+          });
+        }
+      })
+      .catch(() => undefined);
+  }, []);
+
+  // Filtra hubs pelos modos que aceitam.
+  const filteredPoints = useMemo(
+    () =>
+      POINTS.filter((p) =>
+        p.connectors.some((c) => c.modes.includes(mode)),
+      ),
+    [mode],
+  );
+
+  const point = useMemo<Point | undefined>(
+    () => filteredPoints.find((p) => p.id === pointId) ?? filteredPoints[0],
+    [filteredPoints, pointId],
+  );
+
+  // Lista de conectores compatíveis no ponto selecionado.
+  const compatibleConnectors = useMemo(
+    () =>
+      (point?.connectors ?? []).filter(
+        (c) => c.modes.includes(mode) && c.status === "free",
+      ),
+    [point, mode],
+  );
+
+  const hoursList = mode === "noite" ? NIGHT_DROP_HOURS : DAY_DROP_HOURS;
+  const pickupList = mode === "noite" ? NIGHT_PICKUP_HOURS : DAY_DROP_HOURS;
+
+  // Reset drop/pickup quando muda modo.
+  useEffect(() => {
+    if (mode === "noite") {
+      setDropHour(21);
+      setPickupHour(7 + 24);
+    } else {
+      setDropHour(12);
+      setPickupHour(12.75);
+    }
+  }, [mode]);
+
+  // Ajusta pickup quando drop muda, mantendo duração razoável.
+  useEffect(() => {
+    if (mode === "noite") {
+      // duração noturna típica: 9h (ex: 21→7)
+      setPickupHour(dropHour + 10 <= 9 + 24 ? dropHour + 10 : 7 + 24);
+    }
+  }, [dropHour, mode]);
+
+  const durationMin = Math.max(15, Math.round((pickupHour - dropHour) * 60));
+  const batteryKwh = profile?.batteryKwh ?? null;
+  const kwhEstimate = batteryKwh ?? null;
+
+  async function submit() {
+    if (!point) return;
+    if (compatibleConnectors.length === 0) {
+      setError("Nenhum conector livre compatível nesse hub.");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/bookings", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          connectorId: compatibleConnectors[0].id,
+          mode,
+          dropHour,
+          pickupHour,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setError(data?.error ?? `Erro ${res.status}`);
+        setSubmitting(false);
+        return;
+      }
+      setStep("feito");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "erro");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   if (step === "feito") {
     return (
@@ -75,30 +162,34 @@ function ReservarContent() {
         </div>
         <h1 className="mt-5 text-2xl font-semibold tracking-tight">Vaga reservada</h1>
         <p className="mt-2 text-[13px] text-black/80">
-          {point.name} · {fmt(hour)} · connector liberado no seu nome
+          {point?.name} · {fmtNight(dropHour)} → {fmtNight(pickupHour)} ({mode === "noite" ? "noturno" : "diurno"})
         </p>
 
         <div className="ev-card mt-6 w-full rounded-[6px] border border-black/10 p-5 text-left">
-          <h2 className="text-[15px] font-semibold">Como ativar</h2>
-          <ol className="mt-3 space-y-3">
+          <h2 className="text-[15px] font-semibold">Como funciona</h2>
+          <ol className="mt-3 space-y-3 text-[13px] text-black/90">
             <li className="flex gap-3">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] bg-[#f2f3f2] text-[11px] font-semibold">1</span>
-              <p className="text-[13px] text-black/90">
-                Chegue no local dentro da janela. A trava só libera com você a menos de{" "}
-                <span className="text-black">{TOLERANCE_MIN} m</span> do ponto.
+              <p>
+                {mode === "noite"
+                  ? `Deixe o carro no conector ${compatibleConnectors[0]?.id} entre ${fmtNight(dropHour)} e ${fmtNight(dropHour + 1)}. A trava só destrava com você a menos de 15 m do ponto.`
+                  : `Chegue no horário (${fmtNight(dropHour)}). A trava só destrava com você a menos de 15 m do ponto.`}
               </p>
             </li>
             <li className="flex gap-3">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] bg-[#f2f3f2] text-[11px] font-semibold">2</span>
-              <p className="text-[13px] text-black/90">
-                Escaneie o QR Code do painel do carregador ou aproxime o celular.
+              <p>
+                {mode === "noite"
+                  ? `Volte às ${fmtNight(pickupHour)} pra buscar o carro carregado.`
+                  : `A carga roda por ${durationMin} min. O kWh é descontado do plano na conclusão.`}
               </p>
             </li>
             <li className="flex gap-3">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] bg-[#f2f3f2] text-[11px] font-semibold">3</span>
-              <p className="text-[13px] text-black/90">
-                A carga começa e o kWh desconta da sua franquia. Excedente sai a{" "}
-                <span className="text-black">R$ {current.overageRate.toFixed(2).replace(".", ",")}/kWh</span>.
+              <p>
+                {batteryKwh
+                  ? `kWh cobrado do plano: ${batteryKwh} kWh (capacidade da bateria cadastrada).`
+                  : "Bateria do carro não cadastrada — kWh será cobrado do plano após a carga."}
               </p>
             </li>
           </ol>
@@ -107,14 +198,14 @@ function ReservarContent() {
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <Link
             href="/motorista/pontos"
-            className="inline-flex h-9 items-center gap-2 rounded-[6px] border border-black/10 bg-black/5 px-4 text-[13px] font-medium transition-colors hover:bg-black/5"
+            className="inline-flex h-10 items-center gap-2 rounded-[6px] border border-black/10 bg-black/5 px-4 text-[13px] font-medium transition-colors hover:bg-black/10"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Ver pontos
           </Link>
           <Link
             href="/motorista/assinatura"
-            className="inline-flex h-9 items-center gap-2 rounded-[6px] border border-[#16a34a]/30 bg-[#16a34a]/10 px-4 text-[13px] font-medium text-[#16a34a] transition-colors hover:bg-[#16a34a]/15"
+            className="inline-flex h-10 items-center gap-2 rounded-[6px] border border-[#16a34a]/30 bg-[#16a34a]/10 px-4 text-[13px] font-medium text-[#16a34a] transition-colors hover:bg-[#16a34a]/15"
           >
             Ver minha assinatura
           </Link>
@@ -126,15 +217,63 @@ function ReservarContent() {
   return (
     <div className="mx-auto max-w-[1100px]">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Reservar vaga</h1>
-        <p className="mt-1 text-[13px] text-black/70">
-          Plano {current.name} · janela {PLAN_WINDOW_LABEL[plan]}
+        <h1 className="text-[22px] font-semibold tracking-tight sm:text-[28px]">Reservar vaga</h1>
+        <p className="mt-1.5 text-[13px] text-black/70 sm:text-[14px]">
+          Plano Pro 150 · 150 kWh inclusos por mês
         </p>
       </div>
 
+      <div className="mb-5 grid grid-cols-2 gap-2 rounded-[6px] border border-black/10 bg-white p-1">
+        <button
+          type="button"
+          onClick={() => setMode("noite")}
+          className={cn(
+            "flex items-center justify-center gap-2 rounded-[6px] px-3 py-3 text-[13px] font-semibold transition-colors sm:text-[14px]",
+            mode === "noite"
+              ? "bg-[#16a34a] text-white"
+              : "text-black/70 hover:bg-black/5",
+          )}
+        >
+          <Moon className="h-4 w-4" />
+          Noturno (AC)
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode("dia")}
+          className={cn(
+            "flex items-center justify-center gap-2 rounded-[6px] px-3 py-3 text-[13px] font-semibold transition-colors sm:text-[14px]",
+            mode === "dia"
+              ? "bg-[#16a34a] text-white"
+              : "text-black/70 hover:bg-black/5",
+          )}
+        >
+          <Sun className="h-4 w-4" />
+          Diurno (AC ou DC)
+        </button>
+      </div>
+
+      {mode === "noite" ? (
+        <div className="mb-5 flex items-start gap-2 rounded-[6px] border border-black/10 bg-[#f7f8f6]/60 p-3 text-[12px] text-black/75">
+          <Moon className="mt-0.5 h-4 w-4 shrink-0 text-ac" />
+          <p>
+            <strong>Reserva noturna em vaga AC (nossas garagens):</strong> você deixa
+            o carro entre 18h e 6h, busca entre 6h e 9h. A bateria carrega inteira
+            durante a janela.
+          </p>
+        </div>
+      ) : (
+        <div className="mb-5 flex items-start gap-2 rounded-[6px] border border-black/10 bg-[#f7f8f6]/60 p-3 text-[12px] text-black/75">
+          <Sun className="mt-0.5 h-4 w-4 shrink-0 text-dc" />
+          <p>
+            <strong>Reserva diurna em AC ou DC:</strong> horário entre 6h e 18h.
+            Duração: AC 30min a 4h, DC 15min a 2h.
+          </p>
+        </div>
+      )}
+
       <ol className="mb-6 flex items-center gap-2 text-[12px]">
         {[
-          { k: "escolher", label: "Escolher ponto e horário" },
+          { k: "escolher", label: mode === "noite" ? "Deixar e buscar" : "Escolher ponto e horário" },
           { k: "confirmar", label: "Confirmar" },
           { k: "feito", label: "Reservado" },
         ].map((s, i) => {
@@ -160,11 +299,14 @@ function ReservarContent() {
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <div className="flex flex-col gap-4">
-          <section className="ev-card rounded-[6px] border border-black/10 p-5">
-            <h2 className="text-[13px] font-semibold">1. Ponto de recarga</h2>
+          <section className="ev-card rounded-[6px] border border-black/10 p-4 sm:p-5">
+            <h2 className="text-[14px] font-semibold">1. Ponto de recarga</h2>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {POINTS.map((p) => {
-                const on = p.id === pointId;
+              {filteredPoints.map((p) => {
+                const on = p.id === point?.id;
+                const freeCount = p.connectors.filter(
+                  (c) => c.modes.includes(mode) && c.status === "free",
+                ).length;
                 return (
                   <button
                     key={p.id}
@@ -180,10 +322,13 @@ function ReservarContent() {
                       {on && <Check className="h-3.5 w-3.5 shrink-0 text-[#16a34a]" />}
                     </div>
                     <p className="mt-1 text-[11px] text-black/70">{p.neighborhood}</p>
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {p.connectors.map((c) => (
-                        <KindBadge key={c.id} kind={c.kind} powerKw={c.powerKw} />
-                      ))}
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <span className="rounded-[6px] border border-black/10 bg-white px-2 py-0.5 text-[10px] text-black/70">
+                        {freeCount} livres
+                      </span>
+                      <span className="rounded-[6px] border border-black/10 bg-white px-2 py-0.5 text-[10px] text-black/70">
+                        AC 22kW
+                      </span>
                     </div>
                   </button>
                 );
@@ -191,138 +336,196 @@ function ReservarContent() {
             </div>
           </section>
 
-          <section className="ev-card rounded-[6px] border border-black/10 p-5">
-            <h2 className="text-[13px] font-semibold">2. Janela de horário</h2>
-            <p className="mt-1.5 text-[12px] text-black/70">
-              Janela permitida: {PLAN_WINDOW_LABEL[plan]} · duração{" "}
-              {duration >= 60 ? `${duration / 60}h` : `${duration} min`}
-            </p>
+          {mode === "noite" ? (
+            <section className="ev-card rounded-[6px] border border-black/10 p-4 sm:p-5">
+              <h2 className="text-[14px] font-semibold">2. Horário de deixar e buscar</h2>
+              <div className="mt-3">
+                <p className="text-[12px] font-medium text-black/70">Deixar o carro (entre 18h e 6h)</p>
+                <div className="mt-2 grid grid-cols-7 gap-1.5 sm:grid-cols-13">
+                  {hoursList.map((h) => (
+                    <button
+                      key={`d-${h}`}
+                      type="button"
+                      onClick={() => setDropHour(h)}
+                      className={cn(
+                        "rounded-[6px] border py-2 font-mono text-[12px] transition-colors",
+                        dropHour === h
+                          ? "border-[#16a34a]/50 bg-[#16a34a]/10 text-[#16a34a]"
+                          : "border-black/10 text-black hover:border-black/20",
+                      )}
+                    >
+                      {fmtHour(h)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-4">
+                <p className="text-[12px] font-medium text-black/70">Buscar o carro (entre 6h e 9h)</p>
+                <div className="mt-2 grid grid-cols-4 gap-1.5">
+                  {NIGHT_PICKUP_HOURS.map((h) => (
+                    <button
+                      key={`p-${h}`}
+                      type="button"
+                      onClick={() => setPickupHour(h + 24)}
+                      className={cn(
+                        "rounded-[6px] border py-2 font-mono text-[12px] transition-colors",
+                        pickupHour === h + 24
+                          ? "border-[#16a34a]/50 bg-[#16a34a]/10 text-[#16a34a]"
+                          : "border-black/10 text-black hover:border-black/20",
+                      )}
+                    >
+                      {fmtHour(h)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+          ) : (
+            <section className="ev-card rounded-[6px] border border-black/10 p-4 sm:p-5">
+              <h2 className="text-[14px] font-semibold">2. Horário de início (6h às 18h)</h2>
+              <div className="mt-3 grid grid-cols-7 gap-1.5 sm:grid-cols-13">
+                {DAY_DROP_HOURS.map((h) => (
+                  <button
+                    key={`d-${h}`}
+                    type="button"
+                    onClick={() => {
+                      setDropHour(h);
+                      // mantém duração atual se já é válida
+                      const newPickup = h + durationMin / 60;
+                      if (newPickup <= 18) setPickupHour(newPickup);
+                      else setPickupHour(Math.min(18, h + 0.5));
+                    }}
+                    className={cn(
+                      "rounded-[6px] border py-2 font-mono text-[12px] transition-colors",
+                      dropHour === h
+                        ? "border-[#16a34a]/50 bg-[#16a34a]/10 text-[#16a34a]"
+                        : "border-black/10 text-black hover:border-black/20",
+                    )}
+                  >
+                    {fmtHour(h)}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-3 text-[12px] font-medium text-black/70">Duração</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {DAY_DURATIONS_MIN.AC.map((d) => (
+                  <button
+                    key={`d-${d}`}
+                    type="button"
+                    onClick={() => setPickupHour(dropHour + d / 60)}
+                    className={cn(
+                      "rounded-[6px] border px-3 py-2 text-[12px] transition-colors",
+                      durationMin === d
+                        ? "border-[#16a34a]/50 bg-[#16a34a]/10 text-[#16a34a]"
+                        : "border-black/10 text-black hover:border-black/20",
+                    )}
+                  >
+                    {d < 60 ? `${d} min` : `${d / 60}h`}
+                  </button>
+                ))}
+                {point?.connectors.find((c) => c.modes.includes(mode))?.kind === "DC" &&
+                  DAY_DURATIONS_MIN.DC.map((d) => (
+                    <button
+                      key={`dd-${d}`}
+                      type="button"
+                      onClick={() => setPickupHour(dropHour + d / 60)}
+                      className={cn(
+                        "rounded-[6px] border px-3 py-2 text-[12px] transition-colors",
+                        durationMin === d
+                          ? "border-[#16a34a]/50 bg-[#16a34a]/10 text-[#16a34a]"
+                          : "border-black/10 text-black hover:border-black/20",
+                      )}
+                    >
+                      {d < 60 ? `${d} min` : `${d / 60}h`}
+                    </button>
+                  ))}
+              </div>
+            </section>
+          )}
 
-            <div className="mt-4 grid grid-cols-6 gap-1.5 sm:grid-cols-8">
-              {hours.map((h) => (
-                <button
-                  key={h}
-                  type="button"
-                  onClick={() => setHour(h)}
-                  className={cn(
-                    "rounded-[6px] border py-2 font-mono text-[12px] transition-colors",
-                    hour === h
-                      ? "border-[#16a34a]/50 bg-[#16a34a]/10 text-[#16a34a]"
-                      : "border-black/10 text-black hover:border-black/20 hover:text-black",
-                  )}
-                >
-                  {fmt(h)}
-                </button>
-              ))}
+          {error && (
+            <div className="flex items-start gap-2 rounded-[6px] border border-busy/30 bg-busy/10 p-3 text-[12px] text-busy">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              {error}
             </div>
-
-            <div className="mt-4 flex items-start gap-2 rounded-[6px] border border-black/10 bg-[#f7f8f6]/40 p-3">
-              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#16a34a]" />
-              <p className="text-[12px] text-black/80">
-                Reserva fixa semanal, no mesmo conector, com{" "}
-                <span className="text-black">{BUFFER_MIN} min</span> de folga entre
-                agendamentos. Sem recorrência, a reserva vale só para a noite escolhida.
-              </p>
-            </div>
-
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((d, i) => (
-                <button
-                  key={d}
-                  type="button"
-                  onClick={() => setWeekday(i)}
-                  className={cn(
-                    "h-8 w-10 rounded-[6px] border text-[11px] font-medium transition-colors",
-                    weekday === i
-                      ? "border-black/20 bg-black/[0.08] text-black"
-                      : "border-black/10 text-black hover:text-black",
-                  )}
-                >
-                  {d}
-                </button>
-              ))}
-              <span className="ml-auto text-[11px] text-black/60">
-                recorrência semanal
-              </span>
-            </div>
-          </section>
+          )}
         </div>
 
         <aside className="lg:sticky lg:top-6 lg:self-start">
-          <div className="ev-card rounded-[6px] border border-black/10 p-5">
-            <h2 className="text-[13px] font-semibold">Resumo</h2>
+          <div className="ev-card rounded-[6px] border border-black/10 p-4 sm:p-5">
+            <h2 className="text-[14px] font-semibold">Resumo</h2>
 
             <dl className="mt-4 space-y-3 text-[12px]">
               <div className="flex justify-between gap-3">
                 <dt className="flex items-center gap-1.5 text-black/70">
                   <MapPin className="h-3.5 w-3.5" /> Ponto
                 </dt>
-                <dd className="text-right font-medium">{point.name}</dd>
+                <dd className="text-right font-medium">{point?.name ?? "—"}</dd>
               </div>
               <div className="flex justify-between gap-3">
                 <dt className="flex items-center gap-1.5 text-black/70">
-                  <Clock className="h-3.5 w-3.5" /> Horário
+                  <Clock className="h-3.5 w-3.5" /> {mode === "noite" ? "Deixar" : "Início"}
+                </dt>
+                <dd className="text-right font-medium">{fmtNight(dropHour)}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="flex items-center gap-1.5 text-black/70">
+                  <Clock className="h-3.5 w-3.5" /> {mode === "noite" ? "Buscar" : "Fim"}
+                </dt>
+                <dd className="text-right font-medium">{fmtNight(pickupHour)}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="flex items-center gap-1.5 text-black/70">
+                  <Timer className="h-3.5 w-3.5" /> Duração
                 </dt>
                 <dd className="text-right font-medium">
-                  {fmt(hour)} · {duration >= 60 ? `${duration / 60}h` : `${duration} min`}
+                  {durationMin < 60 ? `${durationMin} min` : `${Math.floor(durationMin / 60)}h${durationMin % 60 ? durationMin % 60 + "min" : ""}`}
                 </dd>
               </div>
               <div className="flex justify-between gap-3">
                 <dt className="flex items-center gap-1.5 text-black/70">
-                  <Timer className="h-3.5 w-3.5" /> Tolerância
+                  <BatteryCharging className="h-3.5 w-3.5" /> Bateria cadastrada
                 </dt>
-                <dd className="text-right font-medium">{TOLERANCE_MIN} min</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-black/70">Plano</dt>
-                <dd className="text-right font-medium">{current.name}</dd>
+                <dd className="text-right font-medium">
+                  {kwhEstimate ? `${kwhEstimate} kWh` : "—"}
+                </dd>
               </div>
             </dl>
 
             <div className="mt-4 space-y-2 border-t border-black/10 pt-4 text-[12px]">
-              <div className="flex justify-between">
-                <span className="text-black/70">Mensalidade</span>
-                <span className="tabular-nums">R$ {current.monthlyFee.toFixed(2).replace(".", ",")}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-black/70">Franquia do plano</span>
-                <span className="tabular-nums">{current.includedKwh} kWh</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-black/70">Carga estimada</span>
-                <span className="tabular-nums">{estimateKwh} kWh</span>
-              </div>
-              {overEstimate > 0 && (
-                <div className="flex justify-between text-busy">
-                  <span>Excedente ({overEstimate} kWh)</span>
-                  <span className="tabular-nums">
-                    R$ {overCost.toFixed(2).replace(".", ",")}
-                  </span>
-                </div>
-              )}
-              <div className="flex justify-between border-t border-black/10 pt-2 text-[13px] font-semibold">
-                <span>Total do ciclo</span>
-                <span className="tabular-nums">
-                  R$ {totalToday.toFixed(2).replace(".", ",")}
+              <p className="text-black/70">
+                kWh cobrados do plano:{" "}
+                <span className="font-semibold text-black">
+                  {kwhEstimate ? `${kwhEstimate} kWh` : "Bateria não cadastrada"}
                 </span>
-              </div>
+              </p>
+              {kwhEstimate === null && (
+                <Link
+                  href="/motorista/perfil"
+                  className="inline-flex items-center gap-1 text-[12px] font-medium text-[#16a34a] underline-offset-2 hover:underline"
+                >
+                  Cadastrar bateria no perfil →
+                </Link>
+              )}
             </div>
 
             {step === "escolher" ? (
               <button
                 type="button"
                 onClick={() => setStep("confirmar")}
-                className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-[6px] border border-[#16a34a]/30 bg-white text-[13px] font-semibold text-[#16a34a] transition-colors hover:bg-[#16a34a]/5"
+                disabled={!point || compatibleConnectors.length === 0}
+                className="mt-4 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[6px] border border-[#16a34a]/30 bg-[#16a34a]/10 text-[14px] font-semibold text-[#16a34a] transition-colors hover:bg-[#16a34a]/15 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Revisar reserva
               </button>
             ) : (
               <button
                 type="button"
-                onClick={() => setStep("feito")}
-                className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-[6px] bg-[#16a34a] text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-[#15803d]"
+                onClick={submit}
+                disabled={submitting}
+                className="mt-4 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[6px] bg-[#16a34a] text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-[#15803d] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Confirmar reserva
+                {submitting ? "Reservando…" : "Confirmar reserva"}
                 <Check className="h-4 w-4" />
               </button>
             )}
@@ -330,12 +533,11 @@ function ReservarContent() {
             <div className="mt-3 space-y-2">
               <p className="flex items-start gap-1.5 text-[11px] text-black/70">
                 <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-busy" />
-                Não iniciar a carga gera taxa de no-show. Passar do tempo gera multa de{" "}
-                {IDLE_FEE_PER_MIN.toFixed(2).replace(".", ",")} R$/min.
+                Não chegar ou não buscar gera no-show (taxa R$ 20).
               </p>
               <p className="flex items-start gap-1.5 text-[11px] text-black/70">
-                <QrCode className="h-3 w-3 shrink-0 text-taken" />
-                O conector só destrava com QR Code + GPS no local.
+                <ShieldCheck className="mt-0.5 h-3 w-3 shrink-0 text-[#16a34a]" />
+                Conector só destrava com GPS no local.
               </p>
             </div>
           </div>

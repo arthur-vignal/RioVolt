@@ -91,9 +91,10 @@ function createSchema(conn: Database.Database) {
       plate           TEXT,
       car_model       TEXT,
       kwh_plan_limit  INTEGER,
+      battery_kwh     REAL,
+      car_model_id    TEXT,
       created_at      TEXT NOT NULL DEFAULT (datetime('now'))
     );
-
     CREATE TABLE IF NOT EXISTS points (
       id            TEXT PRIMARY KEY,
       name          TEXT NOT NULL,
@@ -112,7 +113,8 @@ function createSchema(conn: Database.Database) {
       kind        TEXT NOT NULL CHECK (kind IN ('AC','DC')),
       power_kw    REAL NOT NULL,
       status      TEXT NOT NULL CHECK (status IN ('free','reserved','in_use','offline')),
-      note        TEXT
+      note        TEXT,
+      modes       TEXT NOT NULL DEFAULT '["noite","dia"]'
     );
 
     CREATE TABLE IF NOT EXISTS bookings (
@@ -121,8 +123,10 @@ function createSchema(conn: Database.Database) {
       connector_id  TEXT NOT NULL REFERENCES connectors(id) ON DELETE CASCADE,
       point_id      TEXT NOT NULL REFERENCES points(id) ON DELETE CASCADE,
       plan          TEXT NOT NULL CHECK (plan IN ('noturno','pro')),
-      start_hour    REAL NOT NULL,
-      duration_min  INTEGER NOT NULL,
+      mode          TEXT NOT NULL CHECK (mode IN ('noite','dia')) DEFAULT 'noite',
+      drop_hour     REAL NOT NULL DEFAULT 21,
+      pickup_hour   REAL NOT NULL DEFAULT 31,
+      duration_min  INTEGER NOT NULL DEFAULT 600,
       status        TEXT NOT NULL CHECK (status IN ('confirmed','pending','cancelled','no_show','done','in_progress')),
       created_at    TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -175,6 +179,20 @@ function createSchema(conn: Database.Database) {
     INSERT OR IGNORE INTO settings (key, value) VALUES ('kwhPrice', '2.04');
     `);
 
+    // Migration idempotente: bancos criados antes das colunas battery_kwh /
+    // car_model_id serem adicionadas precisam de ALTER. try/catch tolera
+    // "column already exists" sem explodir.
+    try {
+    conn.exec("ALTER TABLE users ADD COLUMN battery_kwh REAL");
+    } catch {
+    /* coluna já existe */
+    }
+    try {
+    conn.exec("ALTER TABLE users ADD COLUMN car_model_id TEXT");
+    } catch {
+    /* coluna já existe */
+    }
+
   // Migration idempotente: bancos criados antes da coluna cycle_start /
   // cupons_ac_used serem adicionadas precisam de ALTER. try/catch tolera o
   // caso "column already exists" ou "duplicate column name" sem explodir.
@@ -192,7 +210,30 @@ function createSchema(conn: Database.Database) {
     } catch {
       /* coluna já existe */
     }
-  }
+    // Migration idempotente: bookings em deploys antigos nao tem mode /
+    // drop_hour / pickup_hour. .catch tolera "duplicate column name".
+    try {
+    conn.exec("ALTER TABLE bookings ADD COLUMN mode TEXT NOT NULL DEFAULT 'noite'");
+    } catch {
+    /* coluna já existe */
+    }
+    try {
+    conn.exec("ALTER TABLE bookings ADD COLUMN drop_hour REAL NOT NULL DEFAULT 21");
+    } catch {
+    /* coluna já existe */
+    }
+    try {
+    conn.exec("ALTER TABLE bookings ADD COLUMN pickup_hour REAL NOT NULL DEFAULT 31");
+    } catch {
+    /* coluna já existe */
+    }
+    // Connectors: adicionar modes (banco antigo)
+    try {
+    conn.exec("ALTER TABLE connectors ADD COLUMN modes TEXT NOT NULL DEFAULT '[\"noite\",\"dia\"]'");
+    } catch {
+    /* coluna já existe */
+    }
+    }
 
 // ---------------------------------------------------------------- seed
 
@@ -206,24 +247,24 @@ function seed(conn: Database.Database) {
   const tx = conn.transaction(() => {
     // 1. users (3 motoristas + 1 dono), senha "volta123"
     const insertUser = conn.prepare(
-      `INSERT INTO users (id, email, role, password_hash, name, plate, car_model, kwh_plan_limit)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO users (id, email, role, password_hash, name, plate, car_model, kwh_plan_limit, battery_kwh, car_model_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     insertUser.run(
       "user-1", "mariana@voltrio.app", "motorista", hash(DEMO_PASSWORD),
-      "Mariana Souza", "RIO-2A19", "BYD Dolphin", 200
+      "Mariana Souza", "RIO-2A19", "BYD Dolphin", 200, 44.9, "byd_dolphin"
     );
     insertUser.run(
       "user-2", "rafael@voltrio.app", "motorista", hash(DEMO_PASSWORD),
-      "Rafael Mendes", "RIO-3B42", "Volvo EX30", 200
+      "Rafael Mendes", "RIO-3B42", "Volvo EX30", 200, 64, "volvo_ex30"
     );
     insertUser.run(
       "user-3", "carlos@voltrio.app", "motorista", hash(DEMO_PASSWORD),
-      "Carlos Andrade", "RIO-4C77", "Renault Kwid E-Tech", 200
+      "Carlos Andrade", "RIO-4C77", "Renault Kwid E-Tech", 200, 26.8, "renault_kwid_etech"
     );
     insertUser.run(
       "owner-1", "dono@voltrio.app", "donos", hash(DEMO_PASSWORD),
-      "Bruno Tavares", null, null, null
+      "Bruno Tavares", null, null, null, null, null
     );
 
     // 2. points + connectors
@@ -232,13 +273,13 @@ function seed(conn: Database.Database) {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     const insertConn = conn.prepare(
-      `INSERT INTO connectors (id, point_id, kind, power_kw, status, note)
-       VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO connectors (id, point_id, kind, power_kw, status, note, modes)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
     );
     for (const p of POINTS) {
       insertPoint.run(p.id, p.name, p.neighborhood, p.focus, p.address, p.lat, p.lon, p.openHours, p.partner);
       for (const c of p.connectors) {
-        insertConn.run(c.id, p.id, c.kind, c.powerKw, c.status, c.note ?? null);
+        insertConn.run(c.id, p.id, c.kind, c.powerKw, c.status, c.note ?? null, JSON.stringify(c.modes));
       }
     }
 
@@ -301,6 +342,7 @@ type ConnectorRow = {
   power_kw: number;
   status: PointStatus;
   note: string | null;
+  modes: string | null;
 };
 
 type BookingRow = {
@@ -309,7 +351,9 @@ type BookingRow = {
   connector_id: string;
   point_id: string;
   plan: PlanId;
-  start_hour: number;
+  mode: ReservationMode;
+  drop_hour: number;
+  pickup_hour: number;
   duration_min: number;
   status: Booking["status"];
   created_at: string;
@@ -339,6 +383,17 @@ export type UserRow = {
 };
 
 function rowToConnector(r: ConnectorRow): Connector {
+  // modes é JSON serializado: '["noite","dia"]' ou '["dia"]' ou null.
+  let modes: Connector["modes"] = [];
+  if (r.modes) {
+    try {
+      const parsed = JSON.parse(r.modes);
+      if (Array.isArray(parsed)) modes = parsed.filter((m) => m === "noite" || m === "dia");
+    } catch {
+      /* ignore */
+    }
+  }
+  if (modes.length === 0) modes = r.kind === "DC" ? ["dia"] : ["noite", "dia"];
   return {
     id: r.id,
     pointId: r.point_id,
@@ -346,6 +401,7 @@ function rowToConnector(r: ConnectorRow): Connector {
     powerKw: r.power_kw,
     status: r.status,
     note: r.note ?? undefined,
+    modes,
   };
 }
 
@@ -377,7 +433,9 @@ function rowToBooking(r: BookingRow): Booking {
     pointId: r.point_id,
     user: userName,
     planId: r.plan,
-    start: r.start_hour,
+    mode: r.mode,
+    dropHour: r.drop_hour,
+    pickupHour: r.pickup_hour,
     durationMin: r.duration_min,
     status: r.status,
   };
@@ -419,7 +477,7 @@ export function listBookingsForDay(_date: string): Booking[] {
   const conn = db();
   const rows = conn
     .prepare(
-      `SELECT * FROM bookings ORDER BY start_hour ASC`
+      `SELECT * FROM bookings ORDER BY drop_hour ASC`
     )
     .all() as BookingRow[];
   return rows.map(rowToBooking);
@@ -463,9 +521,10 @@ export function verifyPassword(email: string, password: string): UserRow | null 
 const createBookingSchema = z.object({
   userId: z.string().min(1),
   connectorId: z.string().min(1),
-  plan: z.enum(["noturno", "pro"]),
-  startHour: z.number().min(0).max(24),
-  durationMin: z.number().int().positive().max(24 * 60),
+  plan: z.enum(["pro"]),
+  mode: z.enum(["noite", "dia"]),
+  dropHour: z.number().min(0).max(48),
+  pickupHour: z.number().min(0).max(48),
 });
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
 
@@ -473,73 +532,91 @@ export function createBooking(input: CreateBookingInput): Booking {
   const data = createBookingSchema.parse(input);
   const conn = db();
 
-  const end = data.startHour + data.durationMin / 60;
+  if (!Number.isFinite(data.dropHour) || !Number.isFinite(data.pickupHour)) {
+    throw new Error("invalid_hours");
+  }
+  if (data.pickupHour <= data.dropHour) {
+    throw new Error("pickup_before_drop");
+  }
+  const durationMin = Math.round((data.pickupHour - data.dropHour) * 60);
+
+  // conflito: intervalo [dropHour, pickupHour) colide com reservas ativas
   const existing = conn
     .prepare(
       `SELECT id FROM bookings
        WHERE connector_id = ?
          AND status IN ('confirmed','pending','in_use')
-         AND NOT (start_hour + (duration_min / 60.0) <= ? OR start_hour >= ?)`
+         AND NOT (drop_hour + (duration_min / 60.0) <= ? OR drop_hour >= ?)`
     )
-    .all(data.connectorId, data.startHour, end) as { id: string }[];
+    .all(data.connectorId, data.dropHour, data.pickupHour) as { id: string }[];
   if (existing.length > 0) {
     throw new Error(`connector_busy:${data.connectorId}`);
   }
 
-  // descobrir point_id + kind do conector antes de qualquer coisa (tambem
-  // usado pra validar regra do plano Pro Plus 150 com cupons AC)
+  // descobrir point_id + kind + modes do conector antes de qualquer coisa
   const connInfo = conn
-    .prepare("SELECT point_id, kind FROM connectors WHERE id = ?")
-    .get(data.connectorId) as { point_id: string; kind: ChargerKind } | undefined;
+    .prepare("SELECT point_id, kind, modes FROM connectors WHERE id = ?")
+    .get(data.connectorId) as
+    | { point_id: string; kind: ChargerKind; modes: string | null }
+    | undefined;
   if (!connInfo) throw new Error(`connector_not_found:${data.connectorId}`);
 
-  // Regra Pro Plus 150: cada reserva em conector AC consome 1 cupom de R$20
-  // (isencao da tarifa de estacionamento). Limite mensal: 6.
-  // DC nao consome cupom. Noturno nunca consome (plano noturno).
-  if (data.plan === "pro" && connInfo.kind === "AC") {
-    const sub = conn
-      .prepare(
-        `SELECT id, cupons_ac_used, cycle_start
-         FROM subscriptions WHERE user_id = ?
-         ORDER BY id DESC LIMIT 1`,
-      )
-      .get(data.userId) as
-      | { id: number; cupons_ac_used: number; cycle_start: string }
-      | undefined;
-    if (!sub) throw new Error("cupons_no_subscription");
-    // cycle_start = "YYYY-MM-DD HH:MM:SS" do SQLite (UTC).
-    // Mes/ano atuais — se diferente do cycle_start, zera o contador.
-    const now = new Date();
-    const csDate = new Date(sub.cycle_start.replace(" ", "T") + "Z");
-    const sameCycle =
-      csDate.getUTCFullYear() === now.getUTCFullYear() &&
-      csDate.getUTCMonth() === now.getUTCMonth();
-    const used = sameCycle ? Number(sub.cupons_ac_used) : 0;
-    if (used >= 6) {
-      throw new Error("cupons_ac_esgotados");
+  let connectorModes: ("noite" | "dia")[] = [];
+  if (connInfo.modes) {
+    try {
+      const parsed = JSON.parse(connInfo.modes);
+      if (Array.isArray(parsed)) connectorModes = parsed.filter((m) => m === "noite" || m === "dia");
+    } catch {
+      /* ignore */
     }
-    if (!sameCycle) {
-      conn
-        .prepare(
-          `UPDATE subscriptions
-              SET cycle_start = datetime('now', 'start of month'),
-                  cupons_ac_used = 0
-            WHERE id = ?`,
-        )
-        .run(sub.id);
+  }
+  if (connectorModes.length === 0) {
+    connectorModes = connInfo.kind === "DC" ? ["dia"] : ["noite", "dia"];
+  }
+  if (!connectorModes.includes(data.mode)) {
+    throw new Error(`mode_not_supported:${data.mode}`);
+  }
+
+  // Validacao de janela
+  const dropMin = Math.round(data.dropHour * 60) % (24 * 60);
+  const pickupMin = Math.round(data.pickupHour * 60) % (24 * 60);
+  if (data.mode === "noite") {
+    const dropOk = dropMin >= 18 * 60 || dropMin <= 6 * 60;
+    if (!dropOk) throw new Error("drop_out_of_night_window");
+    if (pickupMin < 6 * 60 || pickupMin > 9 * 60) {
+      throw new Error("pickup_out_of_night_window");
     }
-    conn
-      .prepare("UPDATE subscriptions SET cupons_ac_used = cupons_ac_used + 1 WHERE id = ?")
-      .run(sub.id);
+    if (durationMin < 60 || durationMin > 15 * 60) {
+      throw new Error("night_duration_out_of_range");
+    }
+  } else {
+    if (dropMin < 6 * 60 || dropMin > 18 * 60) {
+      throw new Error("drop_out_of_day_window");
+    }
+    const maxDur = connInfo.kind === "DC" ? 2 * 60 : 4 * 60;
+    const minDur = connInfo.kind === "DC" ? 15 : 30;
+    if (durationMin < minDur || durationMin > maxDur) {
+      throw new Error("day_duration_out_of_range");
+    }
   }
 
   const id = `b-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
   conn
     .prepare(
-      `INSERT INTO bookings (id, user_id, connector_id, point_id, plan, start_hour, duration_min, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'confirmed')`
+      `INSERT INTO bookings (id, user_id, connector_id, point_id, plan, mode, drop_hour, pickup_hour, duration_min, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed')`
     )
-    .run(id, data.userId, data.connectorId, connInfo.point_id, data.plan, data.startHour, data.durationMin);
+    .run(
+      id,
+      data.userId,
+      data.connectorId,
+      connInfo.point_id,
+      data.plan,
+      data.mode,
+      data.dropHour,
+      data.pickupHour,
+      durationMin,
+    );
 
   conn.prepare("UPDATE connectors SET status = 'reserved' WHERE id = ?").run(data.connectorId);
 
@@ -547,7 +624,6 @@ export function createBooking(input: CreateBookingInput): Booking {
   if (!row) throw new Error("createBooking: row not found after insert");
   return rowToBooking(row);
 }
-
 export function cancelBooking(id: string): Booking | undefined {
   const conn = db();
   const row = conn.prepare("SELECT * FROM bookings WHERE id = ?").get(id) as BookingRow | undefined;
@@ -695,6 +771,8 @@ export type Profile = {
   role: "motorista" | "donos";
   plate: string;
   vehicle: string;
+  batteryKwh: number | null;
+  carModelId: string | null;
 };
 
 export function listAllUsers(): UserRow[] {
@@ -721,11 +799,11 @@ export function createUser(input: CreateUserInput): UserRow {
   const dummyHash = "$2a$10$placeholder.hash.for.sqlite.local.only.not.used.for.login";
   conn
     .prepare(
-      `INSERT INTO users (id, email, role, name, plate, car_model, kwh_plan_limit, password_hash)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO users (id, email, role, name, plate, car_model, kwh_plan_limit, battery_kwh, car_model_id, password_hash)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (email) DO NOTHING`
     )
-    .run(input.id, input.email, input.role, input.name, input.plate, input.car_model, input.kwh_plan_limit, dummyHash);
+    .run(input.id, input.email, input.role, input.name, input.plate, input.car_model, input.kwh_plan_limit, input.battery_kwh, input.car_model_id, dummyHash);
   const row = conn
     .prepare("SELECT * FROM users WHERE email = ?")
     .get(input.email.toLowerCase()) as UserRow | undefined;
@@ -744,12 +822,20 @@ export function getProfile(userId: string): Profile | undefined {
     role: u.role,
     plate: u.plate ?? "",
     vehicle: u.car_model ?? "",
+    batteryKwh: u.battery_kwh != null ? Number(u.battery_kwh) : null,
+    carModelId: u.car_model_id ?? null,
   };
 }
 
 export function updateProfile(
   userId: string,
-  patch: { name?: string; plate?: string; vehicle?: string },
+  patch: {
+    name?: string;
+    plate?: string;
+    vehicle?: string;
+    batteryKwh?: number | null;
+    carModelId?: string | null;
+  },
 ): Profile | undefined {
   const conn = db();
   const u = findUserById(userId);
@@ -762,6 +848,12 @@ export function updateProfile(
   }
   if (typeof patch.vehicle === "string") {
     conn.prepare("UPDATE users SET car_model = ? WHERE id = ?").run(patch.vehicle, userId);
+  }
+  if (typeof patch.carModelId !== "undefined") {
+    conn.prepare("UPDATE users SET car_model_id = ? WHERE id = ?").run(patch.carModelId, userId);
+  }
+  if (typeof patch.batteryKwh !== "undefined") {
+    conn.prepare("UPDATE users SET battery_kwh = ? WHERE id = ?").run(patch.batteryKwh, userId);
   }
   return getProfile(userId);
 }
@@ -902,21 +994,23 @@ export function startCharge(input: { userId: string; bookingId: string }): {
   return { ok: true, booking, charge };
 }
 
-/** Cria uma reserva a partir de pointId/connectorId/plan/start. */
+/** Cria uma reserva a partir de pointId/connectorId/mode/drop/pickup. */
 export function createReservation(input: {
   userId: string;
   pointId: string;
   connectorId: string;
   planId: PlanId;
-  start: number;
-  durationMin: number;
+  mode: ReservationMode;
+  dropHour: number;
+  pickupHour: number;
 }): Booking {
   return createBooking({
     userId: input.userId,
     connectorId: input.connectorId,
     plan: input.planId,
-    startHour: input.start,
-    durationMin: input.durationMin,
+    mode: input.mode,
+    dropHour: input.dropHour,
+    pickupHour: input.pickupHour,
   });
 }
 /** Atualiza só o status de um conector. */

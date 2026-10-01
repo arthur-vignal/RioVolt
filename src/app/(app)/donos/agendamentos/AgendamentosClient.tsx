@@ -61,7 +61,7 @@ const STATUS_CELL: Record<
   },
 };
 
-const endOf = (b: Booking) => b.start + b.durationMin / 60;
+const endOf = (b: Booking) => b.dropHour + b.durationMin / 60;
 
 type Props = {
   initialBookings: Booking[];
@@ -101,7 +101,7 @@ export function AgendamentosClient({
   async function cancelBooking(b: Booking) {
     if (
       !confirm(
-        `Cancelar a reserva de ${b.user} em ${fmtHour(b.start)}? Essa ação libera o conector ${b.connectorId}.`,
+        `Cancelar a reserva de ${b.user} em ${fmtHour(b.dropHour)}? Essa ação libera o conector ${b.connectorId}.`,
       )
     )
       return;
@@ -318,7 +318,7 @@ export function AgendamentosClient({
                       ))}
 
                       {colBookings.map((b) => {
-                        const top = (b.start - GRID_START) * H_PX;
+                        const top = (b.dropHour - GRID_START) * H_PX;
                         const height = Math.max(
                           22,
                           (b.durationMin / 60) * H_PX - 2,
@@ -339,7 +339,7 @@ export function AgendamentosClient({
                             {height > 34 && (
                               <p className="mt-0.5 flex items-center gap-1 text-[10px] text-black/80">
                                 <Clock3 className="h-2.5 w-2.5" />
-                                {fmtHour(b.start)}–{fmtHour(endOf(b))}
+                                {fmtHour(b.dropHour)}–{fmtHour(endOf(b))}
                               </p>
                             )}
                             {height > 52 && (
@@ -388,7 +388,7 @@ export function AgendamentosClient({
                   <div className="min-w-0">
                     <p className="truncate text-[12px] font-medium">{b.user}</p>
                     <p className="mt-0.5 truncate text-[11px] text-black/70">
-                      {p.neighborhood} · {b.connectorId} · {fmtHour(b.start)}
+                      {p.neighborhood} · {b.connectorId} · {fmtHour(b.dropHour)}
                     </p>
                     <span
                       className={cn(

@@ -151,6 +151,8 @@ export async function POST(request: Request) {
       plate: null,
       car_model: null,
       kwh_plan_limit: role === "motorista" ? 200 : null,
+      battery_kwh: null,
+      car_model_id: null,
     });
 
     return NextResponse.json({

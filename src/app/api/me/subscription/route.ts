@@ -25,22 +25,17 @@ export async function GET() {
   if (!sub) {
     return Response.json({ ok: true, subscription: null });
   }
-  const plan = PLAN_BY_ID[((sub as { planId?: PlanId }).planId ?? (sub as { plan?: PlanId }).plan ?? "noturno") as PlanId];
-  const cuponsACUsed = Number((sub as { cuponsACUsed?: number }).cuponsACUsed ?? 0);
+  const plan = PLAN_BY_ID[((sub as { planId?: PlanId }).planId ?? (sub as { plan?: PlanId }).plan ?? "pro") as PlanId];
   return Response.json({
     ok: true,
     subscription: {
       id: sub.id,
-      planId: (sub as { planId?: PlanId }).planId ?? ((sub as { plan?: PlanId }).plan ?? "noturno"),
+      planId: (sub as { planId?: PlanId }).planId ?? ((sub as { plan?: PlanId }).plan ?? "pro"),
       kwhUsed: sub.kwhUsed,
       monthlyFee: sub.monthlyFee,
       since: sub.since,
       nextRenewal: sub.nextRenewal,
       paymentOk: sub.paymentOk,
-      cuponsACUsed,
-      cuponsACLimit: plan.cuponsAC ?? 0,
-      tarifaEstacionamentoAC: plan.tarifaEstacionamentoAC ?? 0,
-      antecedenciaDias: plan.antecedenciaDias ?? 1,
     },
   });
 }

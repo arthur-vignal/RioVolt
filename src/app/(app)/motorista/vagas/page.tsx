@@ -4,16 +4,7 @@ import { useMemo, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Shell } from "@/app/(app)/layout-client";
-import {
-  POINTS,
-  PLAN_BY_ID,
-  PLAN_WINDOW_LABEL,
-  BUFFER_MIN,
-  isNight,
-  ME,
-  type PlanId,
-  type Point,
-} from "@/lib/mock-data";
+import { POINTS, type Point, isNight } from "@/lib/mock-data";
 import { StatusPill, KindBadge } from "@/components/status";
 import { cn } from "@/lib/utils";
 import { ArrowRight, BatteryCharging, Info, Moon, Sun } from "lucide-react";
@@ -22,19 +13,16 @@ const HOURS = [6, 8, 10, 12, 14, 16, 18, 20, 22, 0, 2, 4, 6];
 
 type SlotState = "free" | "tight" | "full" | "offline";
 
-function slotState(point: Point, plan: PlanId, hour: number): SlotState {
+function slotState(point: Point, hour: number): SlotState {
   const connectors = point.connectors;
   if (connectors.every((c) => c.status === "offline")) return "offline";
-  const inWindow =
-    plan === "noturno" ? isNight(hour) : hour >= 6 && hour < 20;
+  const inWindow = isNight(hour) || (hour >= 6 && hour < 20);
   if (!inWindow) return "offline";
 
   const free = connectors.filter((c) => c.status === "free").length;
   const busy = connectors.filter((c) => c.status === "in_use").length;
 
-  //charges noturnas ocupam quase toda a noite; de dia o AC fica ocioso
-  const usable = plan === "noturno" ? 1 : 2;
-  if (free >= usable) return "free";
+  if (free >= 2) return "free";
   if (busy > 0 && free === 0) return "full";
   if (free > 0) return "tight";
   return "full";
@@ -49,12 +37,10 @@ const SLOT_STYLE: Record<SlotState, { cell: string; label: string }> = {
 
 function PointRow({
   point,
-  plan,
   selectedHour,
   onPickHour,
 }: {
   point: Point;
-  plan: PlanId;
   selectedHour: number;
   onPickHour: (h: number) => void;
 }) {
@@ -78,7 +64,7 @@ function PointRow({
       <div className="no-scrollbar overflow-x-auto">
         <div className="flex min-w-max gap-1">
           {HOURS.map((hour, i) => {
-            const st = slotState(point, plan, hour);
+            const st = slotState(point, hour);
             const s = SLOT_STYLE[st];
             const night = isNight(hour);
             return (
@@ -112,8 +98,6 @@ function PointRow({
 function VagasContent() {
   const params = useSearchParams();
   const preset = params.get("ponto");
-  // Plano do usuario: nao tem seletor. Mostra so a janela do ME.planId.
-  const plan = ME.planId as PlanId;
   const [pointId, setPointId] = useState<string | null>(preset);
   const [hour, setHour] = useState(22);
 
@@ -121,14 +105,15 @@ function VagasContent() {
     () => (pointId ? POINTS.filter((p) => p.id === pointId) : POINTS),
     [pointId],
   );
-  const current = PLAN_BY_ID[plan];
 
   return (
     <div className="mx-auto max-w-[1400px]">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Ver vaga pra carregar</h1>
-        <p className="mt-1 text-[13px] text-black/70">
-          Janelas do plano {current.name} · {PLAN_WINDOW_LABEL[plan]} · buffer de {BUFFER_MIN} min entre reservas
+        <h1 className="text-[22px] font-semibold tracking-tight sm:text-2xl">
+          Ver vaga pra carregar
+        </h1>
+        <p className="mt-1.5 text-[13px] text-black/70">
+          Vagas livres nos hubs. Toque num horário pra abrir a reserva.
         </p>
       </div>
 
@@ -161,13 +146,13 @@ function VagasContent() {
           </button>
         ))}
         <span className="ml-auto font-mono text-[12px] text-black/70">
-          horário: {String(hour).padStart(2, "0")}h
+          horário: {String(hour % 24).padStart(2, "0")}h
         </span>
       </div>
 
       <div className="grid gap-3">
         {points.map((p) => (
-          <PointRow key={p.id} point={p} plan={plan} selectedHour={hour} onPickHour={setHour} />
+          <PointRow key={p.id} point={p} selectedHour={hour} onPickHour={setHour} />
         ))}
       </div>
 
@@ -175,16 +160,17 @@ function VagasContent() {
         <div className="flex items-start gap-2.5 text-[12px] text-black/80">
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-taken" />
           <p>
-            Você tem <span className="font-medium text-black">15 min de tolerância</span> depois do horário
-            reservado. Passou disso sem iniciar a carga, a vaga volta pra rede e pode gerar taxa de no-show.
+            Você tem <span className="font-medium text-black">15 min de tolerância</span>{" "}
+            depois do horário reservado. Passou disso sem iniciar a carga, a vaga
+            volta pra rede e pode gerar taxa de no-show.
           </p>
         </div>
         <Link
-          href={pointId ? `/motorista/reservar?ponto=${pointId}&hora=${hour}` : "/motorista/reservar"}
-          className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-[6px] border border-[#16a34a]/30 bg-[#16a34a]/10 px-4 text-[13px] font-medium text-[#16a34a] transition-colors hover:bg-[#16a34a]/15"
+          href={pointId ? `/motorista/reservar?ponto=${pointId}` : "/motorista/reservar"}
+          className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-[6px] border border-[#16a34a]/30 bg-[#16a34a] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-[#15803d]"
         >
           <BatteryCharging className="h-4 w-4" />
-          Reservar neste horário
+          Reservar neste ponto
           <ArrowRight className="h-3.5 w-3.5" />
         </Link>
       </div>

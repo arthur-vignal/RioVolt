@@ -137,6 +137,8 @@ export type CreateUserInput = {
   plate: string | null;
   car_model: string | null;
   kwh_plan_limit: number | null;
+  battery_kwh: number | null;
+  car_model_id: string | null;
 };
 export function createUser(input: CreateUserInput) {
   return hasPg() ? pgMod.createUser(input) : sqlite().createUser(input);
@@ -147,7 +149,16 @@ export function verifyPassword(email: string, password: string) {
 export function getProfile(userId: string) {
   return hasPg() ? pgMod.getProfile(userId) : Promise.resolve(sqlite().getProfile(userId));
 }
-export function updateProfile(userId: string, patch: { name?: string; plate?: string; vehicle?: string }) {
+export function updateProfile(
+  userId: string,
+  patch: {
+    name?: string;
+    plate?: string;
+    vehicle?: string;
+    batteryKwh?: number | null;
+    carModelId?: string | null;
+  },
+) {
   return hasPg() ? pgMod.updateProfile(userId, patch) : sqlite().updateProfile(userId, patch);
 }
 export function getBooking(id: string) {
@@ -170,9 +181,10 @@ export function getCharge(bookingId: string) {
 export function createBooking(input: {
   userId: string;
   connectorId: string;
-  plan: "noturno" | "pro";
-  startHour: number;
-  durationMin: number;
+  plan: "pro";
+  mode: "noite" | "dia";
+  dropHour: number;
+  pickupHour: number;
 }) {
   return hasPg() ? pgMod.createBooking(input) : sqlite().createBooking(input);
 }
@@ -230,9 +242,10 @@ export function createReservation(input: {
   userId: string;
   pointId: string;
   connectorId: string;
-  planId: "noturno" | "pro";
-  start: number;
-  durationMin: number;
+  planId: "pro";
+  mode: "noite" | "dia";
+  dropHour: number;
+  pickupHour: number;
 }) {
   return hasPg() ? pgMod.createReservation(input) : sqlite().createReservation(input);
 }

@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const userId = getUserIdFromHeaders(request.headers);
+  if (!userId) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   let body: unknown;
   try {
     body = await request.json();
@@ -28,58 +29,77 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Body inválido" }, { status: 400 });
   }
   const b = body as Record<string, unknown>;
-  const pointId = typeof b.pointId === "string" ? b.pointId : "";
   const connectorId = typeof b.connectorId === "string" ? b.connectorId : "";
-  const planId = typeof b.planId === "string" ? b.planId : "noturno";
-  const start = typeof b.start === "number" ? b.start : Number(b.start);
-  const durationMin = typeof b.durationMin === "number" ? b.durationMin : Number(b.durationMin);
-  if (!pointId || !connectorId || !Number.isFinite(start) || !Number.isFinite(durationMin)) {
+  const mode = b.mode === "noite" || b.mode === "dia" ? b.mode : null;
+  const dropHour = Number(b.dropHour);
+  const pickupHour = Number(b.pickupHour);
+  if (!connectorId || !mode || !Number.isFinite(dropHour) || !Number.isFinite(pickupHour)) {
     return NextResponse.json({ error: "Campos obrigatórios ausentes" }, { status: 400 });
   }
   let booking;
-    try {
-      booking = await createBooking({
-        userId,
-        connectorId,
-        plan: planId as "noturno" | "pro",
-        startHour: start,
-        durationMin,
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg === "cupons_ac_esgotados") {
-        return NextResponse.json(
-          {
-            error:
-              "Você atingiu os 6 cupons de R$20 grátis em vagas AC deste ciclo. Próxima reserva AC será tarifada.",
-            code: "CUPONS_AC_ESGOTADOS",
-          },
-          { status: 402 },
-        );
-      }
-      if (msg === "cupons_no_subscription") {
-        return NextResponse.json(
-          {
-            error: "Você precisa de uma assinatura Pro Plus 150 ativa.",
-            code: "NO_SUBSCRIPTION",
-          },
-          { status: 402 },
-        );
-      }
-      if (msg.startsWith("connector_busy:")) {
-        return NextResponse.json(
-          { error: "Esse conector já está reservado nesse horário." },
-          { status: 409 },
-        );
-      }
-      if (msg.startsWith("connector_not_found:")) {
-        return NextResponse.json(
-          { error: "Conector não encontrado." },
-          { status: 404 },
-        );
-      }
-      // Re-throw pro handler global de erro do Next registrar (mantém 500 com stack).
-      throw err;
+  try {
+    booking = await createBooking({
+      userId,
+      connectorId,
+      plan: "pro",
+      mode,
+      dropHour,
+      pickupHour,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const map: Record<string, { status: number; code?: string; error: string }> = {
+      invalid_hours: { status: 400, error: "Horários inválidos." },
+      pickup_before_drop: {
+        status: 400,
+        error: "Horário de retirada deve ser depois do horário de deixar.",
+      },
+      mode_not_supported: {
+        status: 409,
+        error: "Esse conector não aceita esse tipo de reserva.",
+      },
+      drop_out_of_night_window: {
+        status: 400,
+        error: "Deixar o carro à noite deve ser entre 18h e 6h.",
+      },
+      pickup_out_of_night_window: {
+        status: 400,
+        error: "Buscar o carro à noite deve ser entre 6h e 9h.",
+      },
+      night_duration_out_of_range: {
+        status: 400,
+        error: "Reserva noturna deve ter entre 1h e 15h de duração.",
+      },
+      drop_out_of_day_window: {
+        status: 400,
+        error: "Recarga diurna deve começar entre 6h e 18h.",
+      },
+      day_duration_out_of_range: {
+        status: 400,
+        error: "Duração da reserva diurna fora do permitido (AC 30min-4h, DC 15min-2h).",
+      },
+    };
+    if (msg.startsWith("connector_busy:")) {
+      return NextResponse.json(
+        { error: "Esse conector já está reservado nesse horário." },
+        { status: 409 },
+      );
     }
-    return NextResponse.json({ booking });
+    if (msg.startsWith("connector_not_found:")) {
+      return NextResponse.json({ error: "Conector não encontrado." }, { status: 404 });
+    }
+    if (msg.startsWith("mode_not_supported")) {
+      return NextResponse.json(
+        {
+          error: "Esse conector não aceita esse tipo de reserva.",
+          code: "mode_not_supported",
+        },
+        { status: 409 },
+      );
+    }
+    const known = map[msg];
+    if (known) return NextResponse.json({ error: known.error, code: msg }, { status: known.status });
+    throw err;
   }
+  return NextResponse.json({ booking });
+}
