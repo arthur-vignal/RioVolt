@@ -839,6 +839,34 @@ export type CreateUserInput = {
   car_model_id: string | null;
 };
 
+/** Tipo estendido pra signup: aceita password_hash. */
+export type RawInsertUserInput = CreateUserInput & {
+  password_hash: string;
+};
+
+/** Insere usuário com password_hash (signup local). Retorna false em conflito. */
+export function rawInsertUser(input: RawInsertUserInput): boolean {
+  const conn = db();
+  const result = conn
+    .prepare(
+      `INSERT INTO users (id, email, role, name, plate, car_model, kwh_plan_limit, battery_kwh, car_model_id, password_hash)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      input.id,
+      input.email,
+      input.role,
+      input.name,
+      input.plate,
+      input.car_model,
+      input.kwh_plan_limit,
+      input.battery_kwh,
+      input.car_model_id,
+      input.password_hash,
+    );
+  return result.changes > 0;
+}
+
 export function createUser(input: CreateUserInput): UserRow {
   const conn = db();
   // bcrypt dummy password (signup real precisa de signin via Supabase Auth)

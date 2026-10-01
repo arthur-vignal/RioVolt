@@ -179,10 +179,19 @@ export async function initSchema(): Promise<void> {
     });
     await pool.query(`
     ALTER TABLE users
-    ADD COLUMN IF NOT EXISTS car_model_id TEXT;
-    `).catch((err) => {
+      ADD COLUMN IF NOT EXISTS car_model_id TEXT;
+  `).catch((err) => {
     console.error("[voltrio/db-pg] falha ao adicionar car_model_id:", err instanceof Error ? err.message : err);
-    });
+  });
+  // Migration idempotente: senha local em users (caso Supabase Auth falhe
+  // ou esteja desabilitado). bcrypt com salt 10. Nullable pra nao quebrar
+  // usuários Supabase Auth-only.
+  await pool.query(`
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS password_hash TEXT;
+  `).catch((err) => {
+    console.error("[voltrio/db-pg] falha ao adicionar users.password_hash:", err instanceof Error ? err.message : err);
+  });
 
   // Migration idempotente: bookings em deploys antigos nao tem mode /
   // drop_hour / pickup_hour. Adiciona colunas novas (com DEFAULT seguro
@@ -378,6 +387,7 @@ export type UserRow = {
   kwh_plan_limit: number | null;
   battery_kwh: number | null;
   car_model_id: string | null;
+  password_hash: string | null;
   created_at: string;
 };
 
@@ -606,6 +616,34 @@ export type CreateUserInput = {
   battery_kwh: number | null;
   car_model_id: string | null;
 };
+
+/** Tipo estendido pra signup: aceita password_hash. */
+export type RawInsertUserInput = CreateUserInput & {
+  password_hash: string;
+};
+
+/** Insere usuário com password_hash (signup local). Retorna false em conflito. */
+export async function rawInsertUser(input: RawInsertUserInput): Promise<boolean> {
+  const pool = getPool();
+  const result = await pool.query(
+    `INSERT INTO users (id, email, role, name, plate, car_model, kwh_plan_limit, battery_kwh, car_model_id, password_hash)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     ON CONFLICT (email) DO NOTHING`,
+    [
+      input.id,
+      input.email,
+      input.role,
+      input.name,
+      input.plate,
+      input.car_model,
+      input.kwh_plan_limit,
+      input.battery_kwh,
+      input.car_model_id,
+      input.password_hash,
+    ],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
 
 export async function createUser(input: CreateUserInput): Promise<UserRow> {
   await getPool().query(
