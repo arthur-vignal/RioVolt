@@ -245,14 +245,17 @@ export function AssinantesClient({ initialSubscribers }: Props) {
               </thead>
               <tbody>
                 {rows.map((s) => {
-                  const plan = PLAN_BY_ID[s.planId];
+                  // Banco legado pode ter planId="noturno". Fallback pra Pro.
+                  const plan =
+                    PLAN_BY_ID[s.planId as keyof typeof PLAN_BY_ID] ?? PLAN_BY_ID.pro;
                   const quota = plan.includedKwh ?? 200;
                   const pct = Math.min(
                     100,
                     Math.round((s.kwh30d / quota) * 100),
                   );
                   const st = STATUS[s.status];
-                  const Icon = plan.connectorKind === "DC" ? Zap : Moon;
+                  // Pro 150 nao diferencia por conectorKind (unificado). Icon generico.
+                  const Icon = Zap;
                   const busy = busyName === s.name;
                   const isAtivo = s.status === "ativo";
                   const isInad = s.status === "inadimplente";
@@ -268,12 +271,7 @@ export function AssinantesClient({ initialSubscribers }: Props) {
                       <td className="px-4 py-3">
                         <span className="inline-flex items-center gap-1.5 text-[12px] text-black/85">
                           <Icon
-                            className={cn(
-                              "h-3.5 w-3.5",
-                              plan.connectorKind === "DC"
-                                ? "text-dc"
-                                : "text-ac",
-                            )}
+                            className={cn("h-3.5 w-3.5", "text-ac")}
                           />
                           {plan.name}
                         </span>

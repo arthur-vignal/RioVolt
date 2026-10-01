@@ -19,7 +19,7 @@ const brl = (n: number) =>
 
 type SubscriptionDTO = {
   id: number;
-  planId: PlanId;
+  planId: string;
   kwhUsed: number;
   monthlyFee: number;
   since: string;
@@ -32,10 +32,11 @@ function PlanCard({
   current,
 }: {
   id: PlanId;
-  current: PlanId;
+  current: string;
 }) {
-  const p = PLAN_BY_ID[id];
-  const isCurrent = p.id === current;
+  const p = PLAN_BY_ID[id] ?? PLAN_BY_ID.pro;
+  // Banco legado pode ter planId="noturno" — alias pra Pro.
+  const isCurrent = p.id === (current === "noturno" ? "pro" : current);
 
   return (
     <div
@@ -143,7 +144,7 @@ export default function AssinaturaPage() {
     );
   }
 
-  const current = PLAN_BY_ID[sub.planId];
+  const current = PLAN_BY_ID[(sub.planId === "noturno" ? "pro" : sub.planId) as PlanId] ?? PLAN_BY_ID.pro;
   const over = Math.max(0, kwh - (current.includedKwh ?? 0));
   const pct = Math.min(
     100,

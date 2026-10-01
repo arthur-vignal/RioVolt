@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { getSubscriberById } from "@/lib/auth-db";
 import { decodeSession, SESSION_COOKIE_NAME } from "@/lib/session";
 import { getSubscriptionByUserId } from "@/lib/db";
-import { PLAN_BY_ID, type PlanId } from "@/lib/mock-data";
+import { type PlanId } from "@/lib/mock-data";
 
 export const dynamic = "force-dynamic";
 
@@ -25,12 +25,17 @@ export async function GET() {
   if (!sub) {
     return Response.json({ ok: true, subscription: null });
   }
-  const plan = PLAN_BY_ID[((sub as { planId?: PlanId }).planId ?? (sub as { plan?: PlanId }).plan ?? "pro") as PlanId];
+  // Plano legado "noturno" foi descontinuado — alias pra Pro 150.
+  const rawPlanId =
+    (sub as { planId?: string }).planId ??
+    (sub as { plan?: string }).plan ??
+    "pro";
+  const planId: PlanId = rawPlanId === "noturno" ? "pro" : (rawPlanId as PlanId);
   return Response.json({
     ok: true,
     subscription: {
       id: sub.id,
-      planId: (sub as { planId?: PlanId }).planId ?? ((sub as { plan?: PlanId }).plan ?? "pro"),
+      planId,
       kwhUsed: sub.kwhUsed,
       monthlyFee: sub.monthlyFee,
       since: sub.since,
