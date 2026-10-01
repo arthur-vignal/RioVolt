@@ -123,8 +123,8 @@
 
 @layer base {
   * { @apply border-black/10 outline-[#16a34a]/50; }
-  html { @apply font-sans; }
-  body { @apply bg-[#f7f8f6] text-black; }
+  html { @apply font-sans overflow-x-hidden; }
+  body { @apply bg-[#f7f8f6] text-black overflow-x-hidden; }
   button, a { @apply transition-colors; }
 }
 
