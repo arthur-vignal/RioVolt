@@ -557,7 +557,7 @@ export async function listConnectors(): Promise<Connector[]> {
 
 export async function listBookingsForDay(_date: string): Promise<Booking[]> {
   const r = await getPool().query<BookingRow>(
-    "SELECT * FROM bookings ORDER BY start_hour ASC",
+    "SELECT * FROM bookings ORDER BY drop_hour ASC",
   );
   return Promise.all(r.rows.map(rowToBooking));
 }
@@ -746,7 +746,7 @@ export async function getPoint(id: string): Promise<Point | undefined> {
 
 export async function listBookingsForUser(userId: string): Promise<Booking[]> {
   const r = await getPool().query<BookingRow>(
-    "SELECT * FROM bookings WHERE user_id = $1 ORDER BY start_hour ASC",
+    "SELECT * FROM bookings WHERE user_id = $1 ORDER BY drop_hour ASC",
     [userId],
   );
   return Promise.all(r.rows.map(rowToBooking));

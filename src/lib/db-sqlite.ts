@@ -965,7 +965,7 @@ export function getUserIdFromHeaders(headers: Headers): string {
 
 export function listBookingsForUser(userId: string): Booking[] {
   const rows = db()
-    .prepare("SELECT * FROM bookings WHERE user_id = ? ORDER BY start_hour ASC")
+    .prepare("SELECT * FROM bookings WHERE user_id = ? ORDER BY drop_hour ASC")
     .all(userId) as BookingRow[];
   return rows.map(rowToBooking);
 }
