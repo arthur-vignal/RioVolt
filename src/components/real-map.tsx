@@ -153,7 +153,7 @@ export function RealMap({
         if (cancelled || !ref.current || mapRef.current) return;
 
         const map = L.map(ref.current, {
-          center: [-22.97, -43.28],
+          center: [-22.97, -43.205],
           zoom: 12,
           minZoom: 11,
           maxZoom: 17,
@@ -266,7 +266,7 @@ async function renderMarkers(
     });
   });
 
-  map.fitBounds(L.latLngBounds(points.map((p) => [p.lat, p.lon])).pad(0.25), {
+  map.fitBounds(L.latLngBounds(points.map((p) => [p.lat, p.lon])).pad(0.2), {
     animate: false,
   });
 }

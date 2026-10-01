@@ -337,6 +337,14 @@ export function initSeed() {
   const conn = db();
   const pts = (conn.prepare("SELECT COUNT(*) AS n FROM points").get() as { n: number }).n;
   if (pts === 0) seed(conn);
+  // Sync de coords: atualiza lat/lon/endereco/bairro dos pontos existentes
+  // pra refletir o mock-data atual. Idempotente e barato (6 rows).
+  const updatePoint = conn.prepare(
+    `UPDATE points SET lat = ?, lon = ?, address = ?, neighborhood = ? WHERE id = ?`,
+  );
+  for (const p of POINTS) {
+    updatePoint.run(p.lat, p.lon, p.address, p.neighborhood, p.id);
+  }
 }
 
 // ---------------------------------------------------------------- mappers

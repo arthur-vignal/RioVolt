@@ -349,6 +349,14 @@ export async function seedIfEmpty(): Promise<void> {
         );
       }
     }
+    // Sync coords: atualiza lat/lon/endereco dos pontos pra refletir o
+    // mock-data atual. Idempotente (6 rows).
+    for (const p of POINTS) {
+      await tx.query(
+        `UPDATE points SET lat = $1, lon = $2, address = $3, neighborhood = $4 WHERE id = $5`,
+        [p.lat, p.lon, p.address, p.neighborhood, p.id],
+      );
+    }
     // Subscription ativa pra Mariana (user-1), zerada.
     // Plan: noturno, mensalidade R$349, franquia 200 kWh. Demais usuarios sem
     // subscription ate assinarem.

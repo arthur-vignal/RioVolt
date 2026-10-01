@@ -66,8 +66,8 @@ export const POINTS: Point[] = [
     neighborhood: "Leblon",
     focus: "motoristas",
     address: "Av. Afrânio de Melo Franco, 290 - Leblon, Rio de Janeiro - RJ, 22430-060",
-    lat: -22.98473,
-    lon: -43.22312,
+    lat: -22.98533,
+    lon: -43.22495,
     openHours: "06h às 22h",
     partner: "Shopping Leblon",
     connectors: [
@@ -82,8 +82,8 @@ export const POINTS: Point[] = [
     neighborhood: "Ipanema",
     focus: "moradores",
     address: "Rua Visconde de Pirajá, 152 - Ipanema, Rio de Janeiro - RJ",
-    lat: -22.98470,
-    lon: -43.20090,
+    lat: -22.98300,
+    lon: -43.20100,
     openHours: "24 horas",
     partner: "gEpark",
     connectors: [
@@ -103,8 +103,8 @@ export const POINTS: Point[] = [
     neighborhood: "Ipanema",
     focus: "moradores",
     address: "Rua Visconde de Pirajá, 595 - Ipanema, Rio de Janeiro - RJ",
-    lat: -22.98500,
-    lon: -43.19890,
+    lat: -22.98550,
+    lon: -43.19700,
     openHours: "24 horas",
     partner: "Estapar",
     connectors: [
@@ -145,8 +145,8 @@ export const POINTS: Point[] = [
     neighborhood: "Leblon",
     focus: "moradores",
     address: "R. Prof. Antônio Maria Teixeira, 99 - Leblon, Rio de Janeiro - RJ, 22430-050",
-    lat: -22.98470,
-    lon: -43.22310,
+    lat: -22.98400,
+    lon: -43.22050,
     openHours: "24 horas",
     partner: "Shopping Leblon",
     connectors: [
