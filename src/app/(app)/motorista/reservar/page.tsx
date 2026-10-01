@@ -9,7 +9,6 @@ import {
   PLAN_BY_ID,
   NIGHT_DROP_HOURS,
   DAY_DROP_HOURS,
-  DAY_DURATIONS_MIN,
   fmtHour,
   PRO_MIN_ADVANCE_HOURS,
   type PlanId,
@@ -144,14 +143,22 @@ function ReservarContent() {
     }
   }, [mode]);
 
-  // Ajusta pickup automaticamente: 1h apos o drop (default sensato).
+  // Ajusta pickup automaticamente: 1h apos o drop (default operacional,
+  // NAO eh estimativa de tempo de carga — eh o limite maximo que o
+  // equipamento comporta no modo escolhido).
   useEffect(() => {
     if (mode === "noite") {
       const base = dropHour < 12 ? dropHour + 24 : dropHour;
-      setPickupHour(base + 1); // +1h eh o minimo (carga de 1h)
+      setPickupHour(base + 1);
+    } else {
+      // Modo dia: +1h default. Backend valida que nao excede o maximo
+      // do tipo (4h AC, 2h DC).
+      setPickupHour(dropHour + 1);
     }
   }, [dropHour, mode]);
 
+  // durationMin eh usado APENAS para a validacao de safety net no backend.
+  // NAO eh exibido na UI — nao estimamos tempo de carga.
   const durationMin = Math.max(15, Math.round((pickupHour - dropHour) * 60));
   const batteryKwh = profile?.batteryKwh ?? null;
   const plan = profile?.plan ?? "free";
@@ -227,7 +234,7 @@ function ReservarContent() {
               <p>
                 {mode === "noite"
                   ? `Volte às ${fmtNight(pickupHour)} pra buscar o carro carregado.`
-                  : `A carga roda por ${durationMin} min. O kWh é descontado do plano na conclusão.`}
+                  : `A carga roda ate voce desconectar ou o carro atingir 100% — depende do seu carro.`}
               </p>
             </li>
             <li className="flex gap-3">
@@ -317,7 +324,7 @@ function ReservarContent() {
           <Sun className="mt-0.5 h-4 w-4 shrink-0 text-dc" />
           <p>
             <strong>Reserva diurna em AC ou DC:</strong> horário entre 6h e 18h.
-            Duração: AC 30min a 4h, DC 15min a 2h.
+            A carga termina quando o carro atinge 100% ou você desconecta.
           </p>
         </div>
       )}
@@ -465,9 +472,9 @@ function ReservarContent() {
                     type="button"
                     onClick={() => {
                       setDropHour(h);
-                      const newPickup = h + durationMin / 60;
-                      if (newPickup <= 18) setPickupHour(newPickup);
-                      else setPickupHour(Math.min(18, h + 0.5));
+                      // Pickup default = drop + 1h (safety net do backend,
+                      // nao exibido na UI).
+                      setPickupHour(h + 1);
                     }}
                     className={cn(
                       "rounded-[6px] border py-2 font-mono text-[12px] transition-colors",
@@ -480,40 +487,11 @@ function ReservarContent() {
                   </button>
                 ))}
               </div>
-              <p className="mt-3 text-[12px] font-medium text-black/70">Duração</p>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {DAY_DURATIONS_MIN.AC.map((d) => (
-                  <button
-                    key={`d-${d}`}
-                    type="button"
-                    onClick={() => setPickupHour(dropHour + d / 60)}
-                    className={cn(
-                      "rounded-[6px] border px-3 py-2 text-[12px] transition-colors",
-                      durationMin === d
-                        ? "border-[#16a34a]/50 bg-[#16a34a]/10 text-[#16a34a]"
-                        : "border-black/10 text-black hover:border-black/20",
-                    )}
-                  >
-                    {d < 60 ? `${d} min` : `${d / 60}h`}
-                  </button>
-                ))}
-                {point?.connectors.find((c) => c.modes.includes(mode))?.kind === "DC" &&
-                  DAY_DURATIONS_MIN.DC.map((d) => (
-                    <button
-                      key={`dd-${d}`}
-                      type="button"
-                      onClick={() => setPickupHour(dropHour + d / 60)}
-                      className={cn(
-                        "rounded-[6px] border px-3 py-2 text-[12px] transition-colors",
-                        durationMin === d
-                          ? "border-[#16a34a]/50 bg-[#16a34a]/10 text-[#16a34a]"
-                          : "border-black/10 text-black hover:border-black/20",
-                      )}
-                    >
-                      {d < 60 ? `${d} min` : `${d / 60}h`}
-                    </button>
-                  ))}
-              </div>
+              <p className="mt-3 text-[12px] text-black/60">
+                Carga maxima por tipo: AC ate 4h, DC ate 2h. A carga termina
+                quando o carro atinge 100% ou voce retira antes — depende
+                do seu carro.
+              </p>
             </section>
           )}
 
@@ -542,22 +520,14 @@ function ReservarContent() {
                 </dt>
                 <dd className="text-right font-medium">{fmtNight(dropHour)}</dd>
               </div>
-              <div className="flex justify-between gap-3">
-                <dt className="flex items-center gap-1.5 text-black/70">
-                  <Clock className="h-3.5 w-3.5" /> {mode === "noite" ? "Buscar" : "Fim"}
-                </dt>
-                <dd className="text-right font-medium">{fmtNight(pickupHour)}</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="flex items-center gap-1.5 text-black/70">
-                  <Timer className="h-3.5 w-3.5" /> Duração
-                </dt>
-                <dd className="text-right font-medium">
-                  {durationMin < 60
-                    ? `${durationMin} min`
-                    : `${Math.floor(durationMin / 60)}h${durationMin % 60 ? durationMin % 60 + "min" : ""}`}
-                </dd>
-              </div>
+              {mode === "noite" && (
+                <div className="flex justify-between gap-3">
+                  <dt className="flex items-center gap-1.5 text-black/70">
+                    <Clock className="h-3.5 w-3.5" /> Buscar
+                  </dt>
+                  <dd className="text-right font-medium">{fmtNight(pickupHour)}</dd>
+                </div>
+              )}
               <div className="flex justify-between gap-3">
                 <dt className="flex items-center gap-1.5 text-black/70">
                   <Sparkles className="h-3.5 w-3.5" /> Plano
