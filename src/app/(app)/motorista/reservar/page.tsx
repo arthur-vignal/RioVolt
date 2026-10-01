@@ -8,7 +8,6 @@ import {
   POINTS,
   PLAN_BY_ID,
   NIGHT_DROP_HOURS,
-  NIGHT_PICKUP_HOURS,
   DAY_DROP_HOURS,
   DAY_DURATIONS_MIN,
   fmtHour,
@@ -113,6 +112,22 @@ function ReservarContent() {
 
   const hoursList = mode === "noite" ? NIGHT_DROP_HOURS : DAY_DROP_HOURS;
 
+  /** Janela de pickup noturna: começa 1h após o drop e vai até 9h da manhã
+   *  seguinte. Gera valores absolutos (ex: drop=21 → pickup = [22, 23, 24, 25, ..., 33]). */
+  const pickupHours = useMemo(() => {
+    if (mode !== "noite") return [] as number[];
+    // Drop 18-23 → "hoje noite" ate 9h amanha. Drop 0-6 → ja passou meia-noite,
+    // vai ate 9h (3-9h de carga max).
+    const start = dropHour < 12 ? dropHour + 24 : dropHour;
+    const end = 33; // 9h do dia seguinte (= 9 + 24)
+    const out: number[] = [];
+    // step 1h, do inicio+1 ate end. dropHour=18 → [19..33], 21 → [22..33].
+    for (let h = start + 1; h <= end; h++) {
+      out.push(h);
+    }
+    return out;
+  }, [dropHour, mode]);
+
   // Reset drop/pickup quando muda modo.
   useEffect(() => {
     if (mode === "noite") {
@@ -124,10 +139,11 @@ function ReservarContent() {
     }
   }, [mode]);
 
-  // Ajusta pickup quando drop muda.
+  // Ajusta pickup automaticamente: 1h apos o drop (default sensato).
   useEffect(() => {
     if (mode === "noite") {
-      setPickupHour(dropHour + 10 <= 9 + 24 ? dropHour + 10 : 7 + 24);
+      const base = dropHour < 12 ? dropHour + 24 : dropHour;
+      setPickupHour(base + 1); // +1h eh o minimo (carga de 1h)
     }
   }, [dropHour, mode]);
 
@@ -410,21 +426,23 @@ function ReservarContent() {
                 </div>
               </div>
               <div className="mt-4">
-                <p className="text-[12px] font-medium text-black/70">Buscar o carro (entre 6h e 9h)</p>
-                <div className="mt-2 grid grid-cols-4 gap-1.5">
-                  {NIGHT_PICKUP_HOURS.map((h) => (
+                <p className="text-[12px] font-medium text-black/70">
+                  Buscar o carro (entre {fmtHour(dropHour < 12 ? dropHour + 24 : dropHour)} e 9h do dia seguinte)
+                </p>
+                <div className="mt-2 grid grid-cols-6 gap-1.5">
+                  {pickupHours.map((h) => (
                     <button
                       key={`p-${h}`}
                       type="button"
-                      onClick={() => setPickupHour(h + 24)}
+                      onClick={() => setPickupHour(h)}
                       className={cn(
                         "rounded-[6px] border py-2 font-mono text-[12px] transition-colors",
-                        pickupHour === h + 24
+                        pickupHour === h
                           ? "border-[#16a34a]/50 bg-[#16a34a]/10 text-[#16a34a]"
                           : "border-black/10 text-black hover:border-black/20",
                       )}
                     >
-                      {fmtHour(h)}
+                      {fmtHour(((h % 24) + 24) % 24)}
                     </button>
                   ))}
                 </div>
