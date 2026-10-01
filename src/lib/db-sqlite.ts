@@ -87,7 +87,7 @@ function createSchema(conn: Database.Database) {
       id              TEXT PRIMARY KEY,
       email           TEXT NOT NULL UNIQUE,
       role            TEXT NOT NULL CHECK (role IN ('motorista','donos')),
-      password_hash   TEXT NOT NULL,
+      password_hash   TEXT,
       name            TEXT NOT NULL,
       plate           TEXT,
       car_model       TEXT,
@@ -402,7 +402,7 @@ export type UserRow = {
   id: string;
   email: string;
   role: "motorista" | "donos";
-  password_hash: string;
+  password_hash: string | null;
   name: string;
   plate: string | null;
   car_model: string | null;
@@ -560,6 +560,7 @@ export function findUserByEmail(email: string): UserRow | undefined {
 export function verifyPassword(email: string, password: string): UserRow | null {
   const u = findUserByEmail(email);
   if (!u) return null;
+  if (!u.password_hash) return null; // user managed by Supabase Auth
   if (!bcrypt.compareSync(password, u.password_hash)) return null;
   return u;
 }
@@ -849,7 +850,7 @@ export type CreateUserInput = {
 
 /** Tipo estendido pra signup: aceita password_hash. */
 export type RawInsertUserInput = CreateUserInput & {
-  password_hash: string;
+  password_hash: string | null;
 };
 
 /** Insere usuário com password_hash (signup local). Retorna false em conflito. */

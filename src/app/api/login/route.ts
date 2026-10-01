@@ -81,15 +81,19 @@ export async function POST(request: Request) {
     );
   }
 
-  // Estratégia de autenticacao:
-  //   1) Tenta local (bcrypt) — funciona sempre que o user tem password_hash
-  //      cadastrado (signup novo no nosso proprio fluxo).
-  //   2) Se falhar e Supabase estiver habilitado, tenta Supabase Auth
-  //      (cobre usuarios antigos que foram criados antes do fluxo local).
-  const localResult = await authenticateLocal(email, password);
-  let result: AuthResult = localResult;
-  if (!result.ok && isSupabaseEnabled()) {
+  // Estrategia de autenticacao:
+  //   1) Se Supabase estiver habilitado, tenta Supabase Auth primeiro
+  //      (caminho primario agora que confirm-email esta desativado).
+  //   2) Se falhar, tenta local (bcrypt) — cobre users antigos
+  //      criados antes de migrar de volta pro Supabase.
+  let result: AuthResult;
+  if (isSupabaseEnabled()) {
     result = await authenticateSupabase(email, password);
+    if (!result.ok) {
+      result = await authenticateLocal(email, password);
+    }
+  } else {
+    result = await authenticateLocal(email, password);
   }
 
   if (!result.ok) {

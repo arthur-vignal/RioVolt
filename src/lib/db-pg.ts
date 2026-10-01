@@ -625,9 +625,10 @@ export type CreateUserInput = {
   car_model_id: string | null;
 };
 
-/** Tipo estendido pra signup: aceita password_hash. */
+/** Tipo estendido pra signup: aceita password_hash opcional
+ *  (string quando usar bcrypt local, null quando Supabase Auth gerencia). */
 export type RawInsertUserInput = CreateUserInput & {
-  password_hash: string;
+  password_hash: string | null;
 };
 
 /** Insere usuário com password_hash (signup local). Retorna false em conflito. */
@@ -674,13 +675,15 @@ export async function listAllUsers(): Promise<UserRow[]> {
 
 export async function verifyPassword(email: string, password: string): Promise<UserRow | null> {
   const pool = getPool();
-  const r = await pool.query<{ password_hash: string }>(
+  const r = await pool.query<{ password_hash: string | null }>(
     "SELECT password_hash FROM users WHERE email = $1",
     [email.trim().toLowerCase()],
   );
   if (!r.rows[0]) return null;
+  // User managed by Supabase Auth — bcrypt local nao funciona.
+  if (!r.rows[0].password_hash) return null;
   const ok = await import("bcryptjs").then((b) =>
-    b.compareSync(password, r.rows[0].password_hash),
+    b.compareSync(password, r.rows[0].password_hash as string),
   );
   if (!ok) return null;
   const u = await findUserByEmail(email);

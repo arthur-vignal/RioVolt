@@ -1,7 +1,6 @@
 /**
- * /api/signup — Cria uma conta nova direto no banco (Postgres em prod,
- * SQLite em dev). Sem Supabase Auth — o auth fica no cookie de sessão
- * HMAC + bcrypt local.
+ * /api/signup — Cria uma conta nova via Supabase Auth (caminho primário)
+ * com fallback local (bcrypt) quando Supabase nao esta habilitado.
  *
  * Body:
  *   {
@@ -10,11 +9,19 @@
  *   }
  *
  * Erros:
- *   400 = validação
- *   409 = email já cadastrado
+ *   400 = validacao
+ *   409 = email ja cadastrado
  *   500 = erro interno
+ *
+ * Requer: NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY
+ * configurados (env). Opcional: SUPABASE_SERVICE_ROLE_KEY para usar
+ * o cliente admin (cria user sem limite de rate).
  */
 import { NextResponse } from "next/server";
+import {
+  getSupabaseAnon,
+  isSupabaseEnabled,
+} from "@/lib/supabase-server";
 import { findUserByEmail } from "@/lib/db";
 import { CAR_MODELS, carModelById } from "@/lib/mock-data";
 
@@ -61,7 +68,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Payload inválido." }, { status: 400 });
   }
 
-  // --- validação ---
+  // --- validacao ---
   const name = asString(body.name, 80);
   const emailRaw = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   if (!name) {
@@ -85,7 +92,7 @@ export async function POST(request: Request) {
     );
   }
 
-  // --- validação do veículo (motorista) ---
+  // --- validacao do veiculo (motorista) ---
   let plate: string | null = null;
   let carModelId: string | null = null;
   let batteryKwh: number | null = null;
@@ -120,10 +127,9 @@ export async function POST(request: Request) {
       vehicle = m.name;
       batteryKwh = m.batteryKwh;
     }
-    // Se nao mandou nada, deixa null. Usuario preenche depois no perfil.
   }
 
-  // --- checa duplicidade ---
+  // --- checa duplicidade local ---
   const existing = await findUserByEmail(emailRaw);
   if (existing) {
     return NextResponse.json(
@@ -132,7 +138,90 @@ export async function POST(request: Request) {
     );
   }
 
-  // --- cria usuário + senha (bcrypt local) ---
+  // --- caminho primario: Supabase Auth ---
+  if (isSupabaseEnabled()) {
+    const supabase = getSupabaseAnon();
+    if (!supabase) {
+      return NextResponse.json(
+        { ok: false, error: "Supabase mal configurado." },
+        { status: 500 },
+      );
+    }
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: emailRaw,
+        password,
+        options: {
+          data: { name, role },
+          emailRedirectTo: undefined, // confirmacao de email desativada
+        },
+      });
+      if (error || !data.user) {
+        console.error("[voltrio/signup] supabase.signUp error:", error?.message);
+        return NextResponse.json(
+          { ok: false, error: error?.message ?? "Falha ao criar conta." },
+          { status: 400 },
+        );
+      }
+      // auth.user.id eh UUID. Replica no Postgres local com mesmo ID.
+      const id = data.user.id;
+      const dbMod = process.env.DATABASE_URL
+        ? await import("@/lib/db-pg")
+        : await import("@/lib/db-sqlite");
+      const inserted = await dbMod.rawInsertUser({
+        id,
+        email: emailRaw,
+        role,
+        name,
+        plate,
+        car_model: vehicle,
+        kwh_plan_limit: role === "motorista" ? 150 : null,
+        battery_kwh: batteryKwh,
+        car_model_id: carModelId,
+        password_hash: null, // senha fica no Supabase Auth
+      });
+      if (!inserted) {
+        return NextResponse.json(
+          { ok: false, error: "Email já cadastrado (condição de corrida)." },
+          { status: 409 },
+        );
+      }
+      // Login imediato: Supabase Auth ja fez signup, entao ja tem sessao?
+      // Nao — signUp exige confirmacao de email OU retorno de session.
+      // Como confirm email esta OFF, ja temos session no data.session.
+      // Mas nosso app usa cookie proprio HMAC, entao vamos gerar um
+      // cookie com o user.id UUID.
+      const { encodeSession, SESSION_COOKIE_NAME, SESSION_MAX_AGE } = await import(
+        "@/lib/session"
+      );
+      const { cookies } = await import("next/headers");
+      const token = encodeSession({
+        userId: id,
+        role,
+        iat: Math.floor(Date.now() / 1000),
+      });
+      const cookieStore = await cookies();
+      cookieStore.set(SESSION_COOKIE_NAME, token, {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        maxAge: SESSION_MAX_AGE,
+        secure: process.env.NODE_ENV === "production",
+      });
+      return NextResponse.json({
+        ok: true,
+        user: { id, email: emailRaw, name, role },
+      });
+    } catch (err) {
+      console.error("[voltrio/signup] supabase error:", err);
+      return NextResponse.json(
+        { ok: false, error: err instanceof Error ? err.message : "Erro no Supabase." },
+        { status: 500 },
+      );
+    }
+  }
+
+  // --- fallback local: bcrypt (dev ou Railway sem Supabase) ---
   const id = `user-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const bcrypt = await import("bcryptjs");
   const passwordHash = await bcrypt.hash(password, 10);
@@ -164,7 +253,7 @@ export async function POST(request: Request) {
       user: { id, email: emailRaw, name, role },
     });
   } catch (err) {
-    console.error("[voltrio/signup] error:", err);
+    console.error("[voltrio/signup] local error:", err);
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : "Erro interno." },
       { status: 500 },
