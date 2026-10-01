@@ -241,7 +241,7 @@ export const PLANS: Plan[] = [
     name: "Pro",
     tagline: "Assinatura mensal pra rodar 150 kWh sem pagar por carga",
     audience: "Moradores sem garagem e motoristas de app",
-    monthlyFee: 374.99,
+    monthlyFee: 399.99,
     includedKwh: 150,
     includedKwhRate: 0,
     overageRate: 0,
@@ -300,7 +300,7 @@ export const ME: Subscription = {
   since: "março de 2026",
   kwhUsed: 168,
   lastCharge: "ontem, 23h40",
-  monthlyFee: 374.99,
+  monthlyFee: 399.99,
   nextRenewal: "05 de outubro",
   paymentOk: true,
 };
@@ -365,18 +365,18 @@ export type Subscriber = {
 };
 
 export const SUBSCRIBERS: Subscriber[] = [
-  { name: "Mariana S.", planId: "pro", status: "ativo", since: "mar/2026", kwh30d: 168, monthlyFee: 374.99 },
-  { name: "Rafael M.", planId: "pro", status: "ativo", since: "jan/2026", kwh30d: 214, monthlyFee: 374.99 },
-  { name: "Juliana P.", planId: "pro", status: "ativo", since: "abr/2026", kwh30d: 92, monthlyFee: 374.99 },
-  { name: "Patrícia L.", planId: "pro", status: "ativo", since: "fev/2026", kwh30d: 245, monthlyFee: 374.99 },
-  { name: "Thiago B.", planId: "pro", status: "ativo", since: "jun/2026", kwh30d: 61, monthlyFee: 374.99 },
-  { name: "Fernanda C.", planId: "pro", status: "inadimplente", since: "nov/2025", kwh30d: 187, monthlyFee: 374.99 },
-  { name: "Carlos A.", planId: "pro", status: "ativo", since: "mar/2026", kwh30d: 388, monthlyFee: 374.99 },
-  { name: "Bruno T.", planId: "pro", status: "ativo", since: "jan/2026", kwh30d: 502, monthlyFee: 374.99 },
-  { name: "Diego R.", planId: "pro", status: "ativo", since: "maio/2026", kwh30d: 311, monthlyFee: 374.99 },
-  { name: "Ana Paula", planId: "pro", status: "ativo", since: "abr/2026", kwh30d: 274, monthlyFee: 374.99 },
-  { name: "Lucas F.", planId: "pro", status: "inadimplente", since: "dez/2025", kwh30d: 421, monthlyFee: 374.99 },
-  { name: "Sofia M.", planId: "pro", status: "cancelado", since: "ago/2026", kwh30d: 0, monthlyFee: 374.99 },
+  { name: "Mariana S.", planId: "pro", status: "ativo", since: "mar/2026", kwh30d: 168, monthlyFee: 399.99 },
+  { name: "Rafael M.", planId: "pro", status: "ativo", since: "jan/2026", kwh30d: 214, monthlyFee: 399.99 },
+  { name: "Juliana P.", planId: "pro", status: "ativo", since: "abr/2026", kwh30d: 92, monthlyFee: 399.99 },
+  { name: "Patrícia L.", planId: "pro", status: "ativo", since: "fev/2026", kwh30d: 245, monthlyFee: 399.99 },
+  { name: "Thiago B.", planId: "pro", status: "ativo", since: "jun/2026", kwh30d: 61, monthlyFee: 399.99 },
+  { name: "Fernanda C.", planId: "pro", status: "inadimplente", since: "nov/2025", kwh30d: 187, monthlyFee: 399.99 },
+  { name: "Carlos A.", planId: "pro", status: "ativo", since: "mar/2026", kwh30d: 388, monthlyFee: 399.99 },
+  { name: "Bruno T.", planId: "pro", status: "ativo", since: "jan/2026", kwh30d: 502, monthlyFee: 399.99 },
+  { name: "Diego R.", planId: "pro", status: "ativo", since: "maio/2026", kwh30d: 311, monthlyFee: 399.99 },
+  { name: "Ana Paula", planId: "pro", status: "ativo", since: "abr/2026", kwh30d: 274, monthlyFee: 399.99 },
+  { name: "Lucas F.", planId: "pro", status: "inadimplente", since: "dez/2025", kwh30d: 421, monthlyFee: 399.99 },
+  { name: "Sofia M.", planId: "pro", status: "cancelado", since: "ago/2026", kwh30d: 0, monthlyFee: 399.99 },
 ];
 
 
